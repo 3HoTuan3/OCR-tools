@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import Config, history_dir
+from .layout import lines_to_table
 from .textutil import has_cjk
 
 EXIT_OK, EXIT_ERROR, EXIT_CANCELLED, EXIT_EMPTY = 0, 2, 3, 4
@@ -38,6 +39,15 @@ def join_text(lines: list[str], join: bool) -> str:
             out += " "
         out += ln
     return out
+
+
+def compose_text(lines, cfg: Config) -> str:
+    """Ghép các dòng OCR thành văn bản theo chế độ: bảng (Tab) / gộp một dòng / giữ xuống dòng."""
+    if getattr(cfg, "table_mode", False):
+        items = [(l.text, getattr(l, "box", None)) for l in lines]
+        if items and all(b is not None for _t, b in items):
+            return lines_to_table(items)
+    return join_text([l.text for l in lines], cfg.join_lines)
 
 
 def save_history(img, text: str, directory: Path, keep: int) -> None:
@@ -82,7 +92,7 @@ def run_job(select, engine_factory, set_text, cfg: Config, hist_dir: Path | None
     engine = box["engine"]
     engine.min_score = cfg.min_score
     res = engine.recognize(img)
-    text = join_text([ln.text for ln in res.lines], cfg.join_lines)
+    text = compose_text(res.lines, cfg)
     out = {"lines": len(res.lines), "chars": len(text), "warnings": list(res.warnings),
            "seconds": round(time.perf_counter() - t0, 2)}
 
@@ -98,6 +108,7 @@ def run_job(select, engine_factory, set_text, cfg: Config, hist_dir: Path | None
     set_text(text)
     snippet = " ".join(text.split())
     out["snippet"] = snippet[:90] + ("…" if len(snippet) > 90 else "")
+    out["text"] = text                       # để cửa sổ kết quả/dịch của app khay dùng lại
     return {"status": "ok", **out}
 
 

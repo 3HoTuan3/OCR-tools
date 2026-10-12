@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ocrtool"
 version = "0.1.0"
-description = "OCR offline nhẹ cho tiếng Việt, Anh, Trung (PaddleOCR v6 + Tesseract)"
+description = "OCR offline nhẹ cho tiếng Việt, Anh, Trung + dịch (PaddleOCR v6 + Tesseract)"
 requires-python = ">=3.9"
 dependencies = [
   "rapidocr>=3.10,<4",

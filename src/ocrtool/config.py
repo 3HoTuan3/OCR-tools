@@ -37,7 +37,21 @@ class Config:
     join_lines: bool = False      # gộp các dòng thành một đoạn
     lang: str = "vie+eng"         # ngôn ngữ Tesseract cho chữ Latin
     min_score: float = 0.0
-    delay_ms: int = 250           # chờ trước khi chụp để menu khay kịp đóng
+    delay_ms: int = 250           # chờ trước khi chụp để menu/cửa sổ nổi kịp ẩn
+    table_mode: bool = False      # xuất dạng bảng (Tab giữa các ô) để dán vào Excel
+    # --- sau khi chụp
+    after_capture: str = "window"  # copy = chỉ chép | window = hiện cửa sổ kết quả | translate = dịch ngay
+    target_lang: str = "vi"        # ngôn ngữ đích khi dịch (xem translate.LANGS)
+    translate_engine: str = "google"
+    translate_autocopy: bool = True  # chép chữ của tab đang xem (gốc/dịch) vào clipboard
+    # --- cửa sổ nổi
+    float_visible: bool = True
+    float_x: int = -1              # -1 = vị trí mặc định (góc dưới phải)
+    float_y: int = -1
+    float_size: int = 48
+    float_opacity: float = 1.0     # độ đục khi không rê chuột vào (0.3 .. 1.0)
+    float_topmost: bool = True
+    hotkey: str = ""               # vd. "ctrl+alt+o"; rỗng = tắt (chỉ Windows)
 
     @classmethod
     def path(cls) -> Path:

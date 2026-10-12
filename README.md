@@ -1,20 +1,25 @@
-# ocr-tool — chụp vùng màn hình, Ctrl+V ra chữ (Việt · Anh · Trung)
+# ocr-tool — chụp vùng màn hình, Ctrl+V ra chữ, dịch luôn (Việt · Anh · Trung)
 
-App nhỏ chạy ở khay hệ thống Windows/Linux. **Bấm biểu tượng → kéo chọn vùng có chữ → dán (Ctrl+V).**
-OCR chạy offline hoàn toàn trên CPU, không cần internet sau khi cài.
+Một biểu tượng nhỏ nổi trên màn hình (Windows/Linux). **Bấm trái → kéo chọn vùng có chữ → dán (Ctrl+V)**, hoặc chuyển sang tab
+**Dịch** để dịch sang ngôn ngữ bạn muốn. **Bấm phải** để mở menu cài đặt. OCR chạy offline hoàn toàn trên CPU;
+chỉ riêng việc dịch (mặc định) cần Internet.
 
 ## Dùng nhanh
 
-1. Chạy `ocr-tray.bat`. Biểu tượng (khung xanh có vài dòng chữ) hiện ở khay hệ thống, thường nằm trong mũi tên **^**
-   cạnh đồng hồ (kéo ra ngoài nếu muốn ghim).
-2. **Bấm chuột trái** vào biểu tượng → màn hình mờ đi.
-3. **Kéo chuột** chọn vùng có chữ (hiện kích thước vùng; `Esc` hoặc chuột phải để huỷ), rồi thả chuột.
-4. Vài giây sau chữ đã nằm trong clipboard và có thông báo "Đã chép N ký tự".
-   **Ctrl+V** để dán, hoặc **Win+V** để xem lịch sử clipboard
-   (cần bật: *Settings → System → Clipboard → Clipboard history*).
+1. Chạy `ocr-tray.bat`. Một ô vuông nhỏ (khung ngắm + vài dòng chữ) nổi ở góc dưới phải màn hình, luôn ở trên cùng.
+   **Kéo** nó tới chỗ bạn muốn, vị trí được nhớ cho lần sau. Biểu tượng khay hệ thống (trong mũi tên **^**) vẫn còn để bật/tắt cửa sổ nổi.
+2. **Bấm trái** vào ô vuông → màn hình mờ đi → **kéo chuột** chọn vùng có chữ (hiện kích thước; `Esc` hoặc chuột phải để huỷ), thả chuột.
+3. Vài giây sau chữ **đã nằm trong clipboard** (Ctrl+V để dán, Win+V để xem lịch sử clipboard) và hiện **cửa sổ kết quả**:
+   - tab **Bắt chữ**: chữ gốc, sửa được trước khi chép; nút **Chép**.
+   - tab **Dịch**: chọn ngôn ngữ đích (nút `→ Tiếng Việt ▾`); bản dịch tự được chép vào clipboard.
+     Clipboard luôn là chữ của tab bạn đang xem, nên quay lại tab Bắt chữ là có lại chữ gốc.
+   Cùng ngôn ngữ với đích thì tự đảo chiều (chữ Việt + đích Việt → dịch sang English).
+4. **Bấm phải** vào ô vuông → menu: sau khi chụp làm gì (hiện cửa sổ / dịch ngay / chỉ chép), ngôn ngữ và công cụ dịch,
+   kiểu chữ xuất ra (xuống dòng / một đoạn / bảng cho Excel), lịch sử (bấm một mục để chép lại), cỡ + độ trong suốt của ô nổi,
+   phím tắt toàn cục, khởi động cùng máy, ẩn ô nổi, thoát.
 
-App **không** can thiệp Win+Shift+S và **không** theo dõi clipboard. Nó chỉ ghi vào clipboard khi bạn tự chụp bằng biểu tượng
-này và OCR ra được chữ; nếu không thấy chữ nào thì clipboard giữ nguyên.
+App **không** can thiệp Win+Shift+S và **không** theo dõi clipboard. Nó chỉ ghi vào clipboard khi bạn tự chụp và OCR ra được chữ;
+nếu không thấy chữ nào thì clipboard giữ nguyên. Ô nổi tự ẩn trong lúc chụp nên không lọt vào ảnh.
 
 ## Cài đặt
 
@@ -51,27 +56,44 @@ xoá dữ liệu người dùng (cấu hình, lịch sử, log; có hỏi) → t
 hỏi có xoá cả thư mục dự án không. Chế độ nhanh (`/y`, `-y`) giữ lại Tesseract và thư mục dự án.
 Gói hệ thống trên Linux (`tesseract-ocr`, `python3-tk`…) không bị đụng tới.
 
-## Tuỳ chỉnh app khay
-
-Bấm chuột phải vào biểu tượng:
+## Menu chuột phải
 
 | Mục | Ý nghĩa |
 |---|---|
 | Chụp vùng để OCR | Giống bấm trái |
-| Hiện thông báo khi xong | |
-| Gộp các dòng thành một đoạn | Thay vì giữ xuống dòng như trong ảnh |
-| Lưu lịch sử ảnh + chữ | Giữ 20 lần chụp gần nhất (ảnh vùng chọn + chữ) trong `%LOCALAPPDATA%\ocrtool\history` |
-| Mở thư mục lịch sử | |
+| Sau khi chụp | *Hiện cửa sổ kết quả* (mặc định) · *Dịch ngay* (mở thẳng tab Dịch) · *Chỉ chép chữ* (như bản đầu, chỉ báo nhỏ) |
+| Dịch sang: … | Ngôn ngữ đích: Việt, English, 中文 (简/繁), 日本語, 한국어, Français, Deutsch, Español, Português, Русский, Italiano, ไทย, Bahasa Indonesia |
+| Công cụ dịch | *Google* (mặc định, cần Internet) hoặc *Argos* (offline, tuỳ chọn); *Tự chép chữ của tab đang xem* |
+| Kiểu chữ xuất ra | Giữ xuống dòng · Gộp một đoạn · **Bảng** (các ô cách bằng Tab, dán thẳng vào Excel/Sheets) |
+| Lịch sử (n) | 8 lần chụp gần nhất, bấm để chép lại; bật/tắt lưu lịch sử (20 lần gần nhất, ảnh + chữ); mở thư mục lịch sử |
+| Cài đặt cửa sổ nổi | Kích thước, độ trong suốt khi nghỉ, luôn ở trên cùng, đưa về góc màn hình |
+| Thông báo khi chép xong | Chỉ áp dụng khi chọn "Chỉ chép chữ" |
+| Phím tắt toàn cục | Ctrl+Alt+O để chụp ở bất kỳ đâu (chỉ Windows, mặc định tắt; đổi phím bằng `hotkey` trong config) |
 | Khởi động cùng máy | Ghi vào registry `HKCU\...\Run` |
-| Mở file log / Thoát | |
+| Mở file log · Ẩn cửa sổ nổi · Thoát | Ẩn cần biểu tượng khay để mở lại (hoặc chạy lại `ocr-tray.bat`) |
 
-Cấu hình nâng cao: `%LOCALAPPDATA%\ocrtool\config.json` (vd. `delay_ms` = thời gian chờ để menu khay đóng trước khi chụp).
+Biểu tượng khay: bấm trái = chụp; bấm phải = chụp / hiện cửa sổ nổi / khởi động cùng máy / log / thoát.
+
+Cấu hình nâng cao: `%LOCALAPPDATA%\ocrtool\config.json` (vd. `delay_ms` = thời gian chờ để cửa sổ nổi ẩn hẳn trước khi chụp,
+`hotkey` = `"ctrl+shift+f9"`, `float_opacity` = `0.5`).
+
+### Dịch
+- **Google (mặc định):** dùng điểm cuối dịch công khai của Google, không cần khoá. Chữ **chỉ được gửi đi khi bạn mở tab Dịch**.
+  Đây là cổng không chính thức nên có thể bị giới hạn tần suất hoặc đổi; app báo lỗi bằng tiếng Việt và chữ gốc không bị mất.
+- **Argos (offline, tuỳ chọn):** `.venv\Scripts\pip install argostranslate`, rồi chọn *Công cụ dịch → Argos*. Mô hình ~100 MB mỗi cặp ngôn ngữ
+  được tải một lần ở lần dùng đầu; dịch qua tiếng Anh nếu không có cặp trực tiếp. Chất lượng thường thấp hơn Google.
+
+### Lấy ý tưởng từ PowerToys Text Extractor (Win+Shift+T)
+Mình đã đọc tài liệu và mô tả mã nguồn của nó. Điều giữ lại: kéo chọn vùng trên lớp phủ rồi tự chép chữ, `Esc` để huỷ,
+tách chế độ **bảng** (giữ cột/hàng) với chế độ văn bản thường, xử lý riêng chữ Hán/Nhật (không chèn khoảng trắng giữa các ký tự),
+phóng to ảnh nhỏ trước khi nhận dạng. Điều khác: PowerToys dùng engine `Windows.Media.Ocr` có sẵn của Windows (chỉ nhận các
+ngôn ngữ đã cài gói OCR), còn ở đây lõi OCR là bản lai PaddleOCR + Tesseract chạy offline, đọc chuẩn cả tiếng Việt có dấu.
 
 **Tài nguyên.** Mỗi lần chụp chạy trong **một tiến trình riêng** (`ocrtool.job`): chụp màn hình → hiện lớp phủ → nạp engine OCR
-song song trong lúc bạn đang kéo chuột → OCR → chép chữ → thoát. Khay lúc rảnh chỉ là một app nhỏ; RAM chỉ tăng
+song song trong lúc bạn đang kéo chuột → OCR → chép chữ → thoát. App nền lúc rảnh chỉ là cửa sổ nổi + khay nhỏ; RAM chỉ tăng
 (~230 MB, đo trên Linux) trong vài giây khi đang chụp rồi được trả lại.
 
-**Không muốn chạy khay?** `ocr-screen.bat` làm đúng một lần chụp rồi thoát (không có biểu tượng). Tạo shortcut tới nó
+**Không muốn chạy app nền?** `ocr-screen.bat` làm đúng một lần chụp rồi thoát (không có biểu tượng). Tạo shortcut tới nó
 (chuột phải → *Create shortcut*), vào *Properties* và gán *Shortcut key* (vd. `Ctrl+Alt+O`) là có phím tắt toàn hệ thống.
 
 Nếu biểu tượng không xuất hiện hoặc bấm không thấy gì: chạy `ocr-tray-debug.bat` để thấy lỗi, hoặc mở file log từ menu khay
@@ -119,9 +141,11 @@ CER = tỉ lệ ký tự sai (bỏ qua khoảng trắng và kiểu gạch ngang)
 ## Cấu trúc
 
 ```
-src/ocrtool/   tray.py (app khay) · job.py (một lần chụp, tiến trình riêng) · snip.py (lớp phủ chọn vùng)
+src/ocrtool/   tray.py (app nền: ô nổi + khay) · job.py (một lần chụp, tiến trình riêng) · snip.py (lớp phủ chọn vùng)
                engine.py (lõi lai) · tess.py (gọi Tesseract) · textutil.py (so khớp/chọn kết quả)
                clipboard.py · config.py · autostart.py · capture.py (Wayland, toast) · doctor.py (kiểm tra cài đặt)
+               widget.py (ô nổi) · menu.py + appmenu.py (menu chuột phải) · result.py (cửa sổ kết quả)
+               translate.py (dịch) · layout.py (chế độ bảng) · hotkey.py · icons.py · uiutil.py
 setup / uninstall: setup.bat · setup.sh · uninstall.bat · uninstall.sh
 scripts/       get_tessdata.py · evaluate.py · make_samples.py
 tests/         python -m unittest discover -s tests -v
@@ -137,9 +161,12 @@ samples/       ảnh mẫu + đáp án .txt
 - Mỗi lần OCR thành công, chữ thay thế nội dung clipboard hiện có (bản cũ vẫn xem được trong Win+V nếu đã bật lịch sử clipboard).
 - Muốn nhẹ hơn nữa: `python scripts/get_tessdata.py --fast` (xoá `tessdata/*.traineddata` trước) —
   nhanh và nhỏ hơn nhưng sai số cao hơn một chút.
-- Mới kiểm thử trên Linux: toàn bộ logic (tiến trình chụp, khởi động/theo dõi tiến trình con, xử lý lỗi, lịch sử) bằng test tự động,
-  khay hệ thống khởi động được trên màn hình ảo. Lớp phủ chọn vùng chỉ thử với tkinter **giả** (không có tkinter thật ở môi trường thử).
-  Lớp phủ thật, thông báo của Windows, tự khởi động và `setup.bat` **chưa chạy thử trên Windows thật**.
+- Mới kiểm thử trên Linux (88 test tự động): logic chụp/OCR/dịch/bảng, và toàn bộ giao diện (ô nổi, menu, cửa sổ kết quả, lớp phủ chọn vùng)
+  bằng tkinter **thật** trên màn hình ảo. **Chưa chạy thử trên Windows thật**: bấm ra ngoài để đóng menu, ô nổi trong suốt ở góc bo,
+  kéo ô nổi giữa nhiều màn hình khác tỉ lệ, phím tắt toàn cục, tự khởi động, `setup.bat` / `uninstall.bat`. Nếu menu không đóng khi bấm ra ngoài,
+  nhấn `Esc` hoặc bấm lại vào ô nổi, rồi báo mình.
+- Dịch bằng Google cần Internet và là cổng không chính thức; Argos chưa được thử trong môi trường này.
+- Chế độ bảng là heuristic theo toạ độ dòng: bảng có đường kẻ, ô gộp hoặc cột canh phải có thể lệch cột.
 
 ## Gỡ lỗi
 

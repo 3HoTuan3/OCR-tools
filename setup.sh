@@ -23,4 +23,4 @@ echo "[i] Chọn vùng màn hình cần: sudo apt install python3-tk (X11) hoặ
 echo
 python -m ocrtool || true
 echo
-echo "Xong. Chạy app khay:  .venv/bin/python -m ocrtool.tray"
+echo "Xong. Chạy app (ô nổi + khay):  .venv/bin/python -m ocrtool.tray"
