@@ -21,6 +21,6 @@ python scripts/get_tessdata.py
 echo
 echo "[i] Chọn vùng màn hình cần: sudo apt install python3-tk (X11) hoặc grim+slurp (Wayland); clipboard cần xclip hoặc wl-clipboard."
 echo
-python -m ocrtool --doctor || true
+python -m ocrtool || true
 echo
-echo "Xong. Thử:  bash ocr.sh samples/sample_mixed.png"
+echo "Xong. Chạy app khay:  .venv/bin/python -m ocrtool.tray"

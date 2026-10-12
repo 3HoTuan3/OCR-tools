@@ -42,11 +42,10 @@ echo     Download the installer from https://github.com/UB-Mannheim/tesseract/wi
 echo [4/4] Downloading Vietnamese + English data for Tesseract ...
 ".venv\Scripts\python.exe" scripts\get_tessdata.py
 echo.
-".venv\Scripts\python.exe" -m ocrtool --doctor
+".venv\Scripts\python.exe" -m ocrtool
 echo.
-echo Done. Try:  ocr.bat samples\sample_mixed.png
-echo Region capture: ocr.bat --screen --copy
-echo Background app: ocr-tray.bat  (click the tray icon, drag to select, then Ctrl+V)
+echo Done. Start the tray app with:  ocr-tray.bat
+echo Then: click the tray icon (inside the ^ arrow), drag to select text, press Ctrl+V.
 exit /b 0
 
 :nopython

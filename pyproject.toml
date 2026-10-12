@@ -19,7 +19,6 @@ dependencies = [
 ]
 
 [project.scripts]
-ocr = "ocrtool.cli:main"
 ocr-tray = "ocrtool.tray:main"
 
 [tool.setuptools.packages.find]

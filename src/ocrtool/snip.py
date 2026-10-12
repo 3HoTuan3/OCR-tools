@@ -1,6 +1,6 @@
 """Chọn vùng màn hình: chụp cả màn hình rồi hiện lớp phủ để kéo chọn (giống Snipping Tool).
 
-Dùng chung cho `ocr --screen` và tiến trình `ocrtool.job` mà biểu tượng khay khởi động.
+Được tiến trình `ocrtool.job` (do biểu tượng khay khởi động) gọi để người dùng kéo chọn vùng.
 """
 from __future__ import annotations
 

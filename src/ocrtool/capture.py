@@ -1,4 +1,4 @@
-"""Lấy ảnh đầu vào cho dòng lệnh: chọn vùng màn hình, hoặc ảnh trong clipboard."""
+"""Chọn vùng màn hình (Windows/X11 dùng lớp phủ riêng, Wayland nhờ công cụ của desktop) và thông báo nhỏ."""
 from __future__ import annotations
 
 import os
@@ -12,24 +12,6 @@ from PIL import Image
 
 class CaptureError(RuntimeError):
     pass
-
-
-def grab_clipboard_image() -> Image.Image:
-    """Ảnh đang nằm trong clipboard (vd. sau khi bấm Win+Shift+S trên Windows)."""
-    from PIL import ImageGrab
-
-    try:
-        data = ImageGrab.grabclipboard()
-    except Exception as exc:  # Linux thiếu xclip / wl-paste
-        raise CaptureError(f"Không đọc được clipboard: {exc}") from exc
-    if isinstance(data, Image.Image):
-        return data
-    if isinstance(data, list) and data:  # file được copy trong Explorer
-        try:
-            return Image.open(data[0])
-        except Exception as exc:
-            raise CaptureError(f"Clipboard chứa file không phải ảnh: {data[0]}") from exc
-    raise CaptureError("Clipboard không có ảnh. Hãy chụp màn hình (Win+Shift+S) rồi chạy lại.")
 
 
 def show_toast(message: str, ms: int = 1600) -> None:
