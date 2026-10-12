@@ -25,7 +25,7 @@ if HAVE_TK:
     from ocrtool.config import Config
     from ocrtool.menu import SEP, MenuItem, PopupMenu
     from ocrtool.result import ResultWindow
-    from ocrtool.lens import LensWindow, sig_diff, signature
+    from ocrtool.lens import LensWindow, colors_for, fit_text, group_blocks, sig_diff, signature, wrap_text
     from ocrtool.tray import App
     from ocrtool.widget import FloatingButton
 
@@ -582,11 +582,19 @@ class AppTests(UITestBase):
 
 
 
+def L(*texts, h=20, x=10):
+    """Các dòng OCR giả (toạ độ trong khung): mỗi dòng cao h, cách nhau 4px."""
+    return [{"text": t, "box": [[x, 5 + i * (h + 4)], [x + 12 * len(t), 5 + i * (h + 4)],
+                                [x + 12 * len(t), 5 + i * (h + 4) + h], [x, 5 + i * (h + 4) + h]]}
+            for i, t in enumerate(texts)]
+
+
 class LensTests(UITestBase):
     def make(self, frames=None, **kw):
         from PIL import Image, ImageDraw
         cfg = Config()
         cfg.lens_x, cfg.lens_y, cfg.lens_w, cfg.lens_h = 200, 200, 300, 80
+        cfg.lens_mode = kw.pop("mode", "panel")
         self.frames = frames or {"img": Image.new("RGB", (300, 80), "white")}
         self.ocr_calls, self.tr_calls, self.copied = [], [], []
 
@@ -599,7 +607,7 @@ class LensTests(UITestBase):
 
         def translate(text, target):
             self.tr_calls.append((text, target))
-            return tr.Translation(f"<{target}> {text}", "en")
+            return tr.Translation("\n".join(f"<{target}> {p}" for p in text.split("\n")), "en")
         self.rects = []
         lens = LensWindow(self.root, cfg, ocr, translate, self.copied.append, grab_fn=grab, interval_ms=10**6, **kw)
         self.root.update()
@@ -631,7 +639,7 @@ class LensTests(UITestBase):
         self.assertEqual(self.rects[-1], (200, 200, 300, 80))
         lens.step()                                # đang chờ OCR -> không gửi thêm
         self.assertEqual(len(self.ocr_calls), 1)
-        self.ocr_calls.pop()("Hello world", None)
+        self.ocr_calls.pop()(L("Hello world"), None)
         self.assertTrue(pump(self.root, lambda: lens.translated))
         self.assertEqual(lens.translated, "<vi> Hello world")
         self.assertEqual(lens.out_lbl.cget("text"), "<vi> Hello world")
@@ -642,14 +650,14 @@ class LensTests(UITestBase):
         self.assertEqual(self.ocr_calls, [])       # đang chuyển động -> chờ
         lens.step()
         self.assertEqual(len(self.ocr_calls), 1)
-        self.ocr_calls.pop()("Hello world", None)  # cùng chữ -> không dịch lại
+        self.ocr_calls.pop()(L("Hello world"), None)  # cùng chữ -> không dịch lại
         pump(self.root, lambda: False, 0.2)
         self.assertEqual(len(self.tr_calls), 1)
 
     def test_language_change_retranslates_and_flips(self):
         lens = self.make()
         lens.step(); lens.step()
-        self.ocr_calls.pop()("Xin chào các bạn", None)
+        self.ocr_calls.pop()(L("Xin chào các bạn"), None)
         self.assertTrue(pump(self.root, lambda: lens.translated))
         self.assertEqual(self.tr_calls[-1], ("Xin chào các bạn", "en"))      # chữ Việt + đích Việt -> sang English
         lens.set_target("ja")
@@ -668,7 +676,7 @@ class LensTests(UITestBase):
         self.ocr_calls.pop()(None, "Traceback\nOCR hỏng")
         self.assertTrue(pump(self.root, lambda: "OCR hỏng" in lens.status.cget("text")))
         self.frames["img"] = self.frame("x"); lens.step(); lens.step()
-        self.ocr_calls.pop()("", None)
+        self.ocr_calls.pop()([], None)
         self.assertTrue(pump(self.root, lambda: "Không thấy chữ" in lens.status.cget("text")))
         lens.translated = "abc"
         lens.copy_translation()
@@ -687,11 +695,99 @@ class LensTests(UITestBase):
         self.assertEqual((lens.cfg.lens_x, lens.cfg.lens_w), (250, 80))
         self.assertEqual(len(saved), 2)
 
+    def test_overlay_mode_draws_blocks_over_text_and_clears_on_scroll(self):
+        lens = self.make(mode="overlay")
+        self.assertEqual(lens.panel.state(), "withdrawn")         # đè lên chữ: không có bảng bên dưới
+        lens.step(); lens.step()
+        lines = L("The quick brown fox", "jumps over the dog.") + [
+            {"text": "Footer", "box": [[10, 60], [80, 60], [80, 75], [10, 75]]}]
+        lines[2]["box"] = [[200, 56], [290, 56], [290, 68], [200, 68]]    # chữ nhỏ hơn hẳn, chỗ khác -> đoạn riêng
+        self.ocr_calls.pop()(lines, None)
+        self.assertTrue(pump(self.root, lambda: lens.block_wins))
+        self.assertEqual(self.tr_calls[0][0], "The quick brown fox jumps over the dog.\nFooter")
+        self.assertEqual(len(lens.block_wins), 2)
+        w0 = lens.block_wins[0]
+        self.root.update()
+        self.assertEqual((w0.winfo_rootx(), w0.winfo_rooty()), (206, 200))   # lề che dấu bị chặn ở mép khung   # đúng chỗ chữ gốc
+        for w in lens.block_wins:                                   # nằm trong vùng nhìn
+            self.assertTrue(200 <= w.winfo_rootx() and w.winfo_rootx() + w.winfo_width() <= 500)
+        # không phải Windows mới: khối dịch được ẩn thoáng qua lúc chụp để không đọc lại chính bản dịch
+        seen = []
+        self.frames_states = seen
+        orig = lens.grab_fn
+        lens.grab_fn = lambda r: (seen.append([w.state() for w in lens.block_wins]), orig(r))[1]
+        lens.step()
+        self.assertEqual(seen[-1], ["withdrawn", "withdrawn"])
+        self.assertTrue(all(w.state() == "normal" for w in lens.block_wins))
+        self.frames["img"] = self.frame("scroll")                  # cuộn trang -> bỏ bản dịch cũ ngay
+        lens.step()
+        self.assertEqual(lens.block_wins, [])
+
+    def test_mode_toggle(self):
+        saved = []
+        lens = self.make(mode="overlay", save_cfg=lambda: saved.append(1))
+        lens.step(); lens.step()
+        self.ocr_calls.pop()(L("Hello"), None)
+        pump(self.root, lambda: lens.block_wins)
+        lens.toggle_mode()
+        self.assertEqual((lens.mode, lens.cfg.lens_mode), ("panel", "panel"))
+        self.assertEqual(lens.block_wins, [])
+        self.root.update()
+        self.assertNotEqual(lens.panel.state(), "withdrawn")
+        lens.toggle_mode()
+        self.assertEqual(len(lens.block_wins), 1)
+        self.assertEqual(lens.panel.state(), "withdrawn")
+        lens.close()
+        self.assertEqual(lens.block_wins, [])
+
     def test_signature_diff(self):
         a, b = signature(self.frame("aaa")), signature(self.frame("aaaaaaa"))
         self.assertEqual(sig_diff(a, a), 0)
         self.assertGreater(sig_diff(a, b), 3)
         self.assertEqual(sig_diff(None, a), 255)
+
+
+
+@unittest.skipUnless(HAVE_TK, "không có tkinter/màn hình")
+class LensHelperTests(unittest.TestCase):
+    def test_group_blocks(self):
+        lines = L("Dòng một của đoạn", "dòng hai của đoạn") + [
+            {"text": "Tiêu đề lớn", "box": [[10, 100], [200, 100], [200, 140], [10, 140]]},
+            {"text": "你好", "box": [[10, 150], [50, 150], [50, 170], [10, 170]]},
+            {"text": "世界", "box": [[10, 174], [50, 174], [50, 194], [10, 194]]},
+            {"text": "  ", "box": [[0, 0], [1, 0], [1, 1], [0, 1]]}]
+        blocks = group_blocks(lines)
+        self.assertEqual([b["text"] for b in blocks], ["Dòng một của đoạn dòng hai của đoạn", "Tiêu đề lớn", "你好世界"])
+        self.assertEqual(blocks[0]["rect"][1], 5)
+        self.assertEqual(group_blocks([]), [])
+
+    def test_side_by_side_columns_stay_separate(self):
+        a = {"text": "left", "box": [[0, 0], [100, 0], [100, 20], [0, 20]]}
+        b = {"text": "right", "box": [[300, 24], [400, 24], [400, 44], [300, 44]]}
+        self.assertEqual(len(group_blocks([a, b])), 2)
+
+    def test_wrap_and_fit(self):
+        m = lambda s: 10 * len(s)  # noqa: E731
+        self.assertEqual(wrap_text("aa bb cc dd", 50, m), ["aa bb", "cc dd"])
+        self.assertEqual(wrap_text("你好世界和平", 30, m), ["你好世", "界和平"])
+        root = tk.Tk()
+        try:
+            import tkinter.font as tkf
+            mk = lambda px: tkf.Font(root=root, family="DejaVu Sans", size=-px)  # noqa: E731
+            f, lines, total = fit_text("a fairly long translated sentence here", 120, 40, 20, mk)
+            self.assertLessEqual(total, 40)
+            self.assertLess(-f.cget("size"), 20)
+            f2, lines2, _ = fit_text("x", 120, 40, 16, mk)
+            self.assertEqual(f2.cget("size"), -16)
+        finally:
+            root.destroy()
+
+    def test_colors(self):
+        from PIL import Image
+        light = Image.new("RGB", (100, 40), (250, 250, 240))
+        dark = Image.new("RGB", (100, 40), (20, 22, 30))
+        self.assertEqual(colors_for(light, (10, 10, 60, 30)), ("#fafaf0", "#111111"))
+        self.assertEqual(colors_for(dark, (10, 10, 60, 30))[1], "#f5f5f5")
 
 
 if __name__ == "__main__":

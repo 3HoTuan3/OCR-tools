@@ -4,9 +4,39 @@ Một biểu tượng nhỏ nổi trên màn hình (Windows/Linux). **Bấm trá
 **Dịch** để dịch sang ngôn ngữ bạn muốn. **Bấm phải** để mở menu cài đặt. OCR chạy offline hoàn toàn trên CPU;
 chỉ riêng việc dịch (mặc định) cần Internet.
 
+## Chạy thế nào (Windows)
+
+**Lần đầu (một lần duy nhất):** bấm đúp `setup.bat`. Nó tạo thư mục `.venv`, cài thư viện, cài Tesseract và tải dữ liệu tiếng Việt.
+Đợi cửa sổ đen báo `Done.` rồi đóng.
+
+**Mỗi lần dùng:** bấm đúp **`ocr-tray.bat`**. Không hiện cửa sổ nào, chỉ có một ô vuông nhỏ nổi ở góc dưới phải màn hình
+(và biểu tượng trong mũi tên **^** cạnh đồng hồ). Từ đó:
+- **bấm trái** ô vuông → kéo chọn vùng → **Ctrl+V** để dán chữ;
+- **Shift + bấm trái** → mở/tắt lăng kính dịch;
+- **bấm phải** → menu cài đặt. Bật *Khởi động cùng máy* để khỏi phải bấm `ocr-tray.bat` mỗi lần mở máy.
+
+**Sau khi cập nhật code:** bấm phải ô vuông → *Thoát*, rồi bấm đúp `ocr-tray.bat` lại. Không cần chạy lại `setup.bat`
+(trừ khi `requirements.txt` thay đổi).
+
+### Các file .bat dùng để làm gì?
+
+Mỗi file là một "nút bấm" cho một việc, để bạn khỏi phải gõ lệnh trong cửa sổ dòng lệnh:
+
+| File | Khi nào dùng |
+|---|---|
+| `setup.bat` | **Một lần** lúc cài đặt (hoặc khi cài lại). |
+| **`ocr-tray.bat`** | **Hằng ngày.** Mở app (ô nổi + khay). Đây là file duy nhất bạn cần nhớ. |
+| `ocr-tray-debug.bat` | Chỉ khi app **không hiện** hoặc bấm không có gì: mở app kèm cửa sổ đen hiện lỗi để gửi cho mình. |
+| `ocr-screen.bat` | Tuỳ chọn: chụp một lần rồi thoát, không cần app chạy nền (chậm hơn vì nạp engine mỗi lần). Hầu như không cần nữa vì đã có phím tắt Ctrl+Alt+O. |
+| `uninstall.bat` | Khi muốn gỡ sạch app. |
+
+Nếu bạn thấy rối, có thể xoá `ocr-screen.bat`; app vẫn chạy bình thường.
+
+Linux: `bash setup.sh` một lần, rồi `.venv/bin/python -m ocrtool.tray` mỗi lần dùng.
+
 ## Dùng nhanh
 
-1. Chạy `ocr-tray.bat`. Một ô vuông nhỏ (khung ngắm + vài dòng chữ) nổi ở góc dưới phải màn hình, luôn ở trên cùng.
+1. Mở app (`ocr-tray.bat`, xem trên). Một ô vuông nhỏ (khung ngắm + vài dòng chữ) nổi ở góc dưới phải màn hình, luôn ở trên cùng.
    **Kéo** nó tới chỗ bạn muốn, vị trí được nhớ cho lần sau. Biểu tượng khay hệ thống (trong mũi tên **^**) vẫn còn để bật/tắt cửa sổ nổi.
 2. **Bấm trái** vào ô vuông → màn hình mờ đi → **kéo chuột** chọn vùng có chữ (hiện kích thước; `Esc` hoặc chuột phải để huỷ), thả chuột.
 3. Vài giây sau chữ **đã nằm trong clipboard** (Ctrl+V để dán, Win+V để xem lịch sử clipboard) và hiện **cửa sổ kết quả**:
@@ -92,14 +122,18 @@ phóng to ảnh nhỏ trước khi nhận dạng. Điều khác: PowerToys dùng
 ngôn ngữ đã cài gói OCR), còn ở đây lõi OCR là bản lai PaddleOCR + Tesseract chạy offline, đọc chuẩn cả tiếng Việt có dấu.
 
 ### Lăng kính dịch
-Một khung viền xanh nổi trên màn hình. Chữ nào lọt vào **bên trong khung** thì tự được đọc và dịch sang ngôn ngữ đã chọn,
-bản dịch hiện ở bảng tối ngay dưới khung. Lướt/cuộn trang tới đâu, khung đợi nội dung đứng yên (~0,5 s) rồi đọc lại; chữ không đổi thì không dịch lại.
+Một khung viền xanh nổi trên màn hình. Chữ nào lọt vào **bên trong khung** thì tự được đọc, dịch, và **bản dịch được vẽ đè
+lên đúng chỗ chữ gốc** (giống Google Lens): mỗi đoạn văn một khối, màu nền lấy theo nền ảnh, cỡ chữ tự co cho vừa.
+Lướt/cuộn trang: bản dịch cũ biến mất ngay, khung đợi nội dung đứng yên (~0,5 s) rồi đọc và đè bản dịch mới; chữ không đổi thì không dịch lại.
 
 - **Mở / tắt:** Shift + bấm trái (hoặc bấm chuột giữa) vào ô nổi · menu chuột phải → *Lăng kính dịch* · khay → *Lăng kính dịch* · Ctrl+Alt+L (nếu bật phím tắt).
 - **Di chuyển:** kéo thanh tiêu đề. **Đổi cỡ:** kéo ô vuông nhỏ ở góc dưới phải. Vị trí và cỡ được nhớ.
-- **Nút trên thanh:** `→ Tiếng Việt ▾` đổi ngôn ngữ đích · `⧉` chép bản dịch · `⏸` tạm dừng/tiếp tục · `✕` đóng (hoặc `Esc`).
-- Phần giữa khung là rỗng thật: vẫn nhìn, bấm, cuộn trang xuyên qua được.
-- Dùng chung engine thường trực với chụp vùng, nên bật lăng kính thì engine luôn được giữ trong RAM khi khung đang mở.
+- **Nút trên thanh:** `→ Tiếng Việt ▾` đổi ngôn ngữ đích · `⇅` chuyển giữa *đè lên chữ* và *bảng bên dưới khung* ·
+  `⧉` chép bản dịch · `⏸` tạm dừng/tiếp tục · `✕` đóng (hoặc `Esc`). Trạng thái (đang đọc, đang dịch, lỗi) hiện ngay trên thanh tiêu đề.
+- **Windows 10 (bản 2004 trở lên) / Windows 11:** các khối dịch không lọt vào ảnh chụp màn hình và để chuột bấm/cuộn
+  xuyên qua, nên bạn vẫn cuộn trang bình thường dưới bản dịch. Máy khác: khối dịch được ẩn thoáng qua mỗi lần khung chụp
+  (có thể thấy nháy nhẹ), và chạm/cuộn chuột lên khối dịch thì nó biến mất để bạn thao tác.
+- Dùng chung engine thường trực với chụp vùng.
 
 ### Tốc độ và RAM
 Bản trước khởi động **một tiến trình Python mới cho mỗi lần chụp**: import thư viện, nạp model, chạy thử lần đầu. Phần này chiếm

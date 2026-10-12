@@ -61,3 +61,40 @@ def button_down() -> bool:
 
 def now() -> float:
     return time.monotonic()
+
+
+# ---------------------------------------------------------------- Windows: cửa sổ phủ của lăng kính
+def _hwnd(win):
+    import ctypes
+
+    win.update_idletasks()
+    return ctypes.windll.user32.GetAncestor(win.winfo_id(), 2)      # GA_ROOT
+
+
+def exclude_from_capture(win) -> bool:
+    """Windows 10 2004+: cửa sổ vẫn hiện trên màn hình nhưng KHÔNG lọt vào ảnh chụp màn hình
+    (nên lăng kính vẫn đọc được chữ gốc nằm bên dưới bản dịch). Trả về False nếu không hỗ trợ."""
+    if not WIN:
+        return False
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.user32.SetWindowDisplayAffinity(_hwnd(win), 0x11))  # WDA_EXCLUDEFROMCAPTURE
+    except Exception:
+        return False
+
+
+def click_through(win) -> bool:
+    """Windows: chuột bấm/cuộn xuyên qua cửa sổ (WS_EX_TRANSPARENT). Cần gọi sau khi đã đặt -alpha."""
+    if not WIN:
+        return False
+    try:
+        import ctypes
+
+        u = ctypes.windll.user32
+        h = _hwnd(win)
+        style = u.GetWindowLongW(h, -20)                            # GWL_EXSTYLE
+        u.SetWindowLongW(h, -20, style | 0x80000 | 0x20 | 0x08000000)  # LAYERED | TRANSPARENT | NOACTIVATE
+        return True
+    except Exception:
+        return False

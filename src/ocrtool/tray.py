@@ -360,7 +360,6 @@ class App:
     def open_lens(self) -> None:
         from . import translate as tr
         from .clipboard import set_text
-        from .job import join_text
         from .lens import LensWindow
 
         if self.lens is not None:
@@ -370,7 +369,7 @@ class App:
         def ocr_fn(img, cb):
             def done(msg):
                 if msg.get("ok"):
-                    cb(join_text([ln["text"] for ln in msg.get("lines", [])], True), None)
+                    cb(msg.get("lines", []), None)
                 else:
                     cb(None, msg.get("error", "Lỗi OCR"))
             self.client.ocr(img, done, min_score=self.cfg.min_score)

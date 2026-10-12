@@ -60,6 +60,7 @@ class Config:
     lens_y: int = -1
     lens_w: int = -1
     lens_h: int = -1
+    lens_mode: str = "overlay"      # overlay = đè lên chữ gốc | panel = bảng bên dưới khung
     config_version: int = 2
 
     @classmethod
