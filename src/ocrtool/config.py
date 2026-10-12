@@ -37,7 +37,7 @@ class Config:
     join_lines: bool = False      # gộp các dòng thành một đoạn
     lang: str = "vie+eng"         # ngôn ngữ Tesseract cho chữ Latin
     min_score: float = 0.0
-    delay_ms: int = 250           # chờ trước khi chụp để menu/cửa sổ nổi kịp ẩn
+    delay_ms: int = 120           # chờ trước khi chụp để menu/cửa sổ nổi kịp ẩn
     table_mode: bool = False      # xuất dạng bảng (Tab giữa các ô) để dán vào Excel
     # --- sau khi chụp
     after_capture: str = "window"  # copy = chỉ chép | window = hiện cửa sổ kết quả | translate = dịch ngay
@@ -51,7 +51,16 @@ class Config:
     float_size: int = 48
     float_opacity: float = 1.0     # độ đục khi không rê chuột vào (0.3 .. 1.0)
     float_topmost: bool = True
-    hotkey: str = ""               # vd. "ctrl+alt+o"; rỗng = tắt (chỉ Windows)
+    hotkey: str = ""               # vd. "ctrl+alt+o"; rỗng = tắt phím tắt (chỉ Windows)
+    hotkey_lens: str = "ctrl+alt+l"  # phím tắt bật/tắt lăng kính (khi phím tắt đang bật)
+    # --- tốc độ
+    keep_engine_min: int = 15      # giữ engine OCR trong RAM bao lâu sau lần dùng cuối (phút); -1 = luôn, 0 = không giữ
+    # --- lăng kính dịch
+    lens_x: int = -1
+    lens_y: int = -1
+    lens_w: int = -1
+    lens_h: int = -1
+    config_version: int = 2
 
     @classmethod
     def path(cls) -> Path:
@@ -67,6 +76,8 @@ class Config:
                 # bỏ qua khoá cũ/lạ và giá trị sai kiểu (bool không được lẫn với int)
                 if key in known and type(value) is type(getattr(cfg, key)):
                     setattr(cfg, key, value)
+            if data.get("config_version", 1) < 2 and data.get("delay_ms") == 250:
+                cfg.delay_ms = 120         # bản cũ chờ 250 ms; nay chọn vùng chạy ngay trong app nên chờ ít hơn
         except Exception:
             pass
         return cfg

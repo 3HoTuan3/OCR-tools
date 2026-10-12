@@ -11,6 +11,8 @@ OPACITIES = (("100%", 1.0), ("75%", 0.75), ("50%", 0.5), ("30%", 0.3))
 AFTER = (("window", "Hiện cửa sổ kết quả (bắt chữ / dịch)"), ("translate", "Dịch ngay sau khi chụp"),
          ("copy", "Chỉ chép chữ, không hiện cửa sổ"))
 DEFAULT_HOTKEY = "ctrl+alt+o"
+KEEP = ((-1, "Luôn giữ (nhanh nhất, ~250 MB RAM)"), (15, "15 phút sau lần dùng cuối"), (5, "5 phút"),
+        (0, "Không giữ (tiết kiệm RAM, chậm hơn)"))
 
 
 def output_mode(cfg) -> str:
@@ -62,6 +64,8 @@ def build_menu(app) -> list[MenuItem]:
     hot_ok = sys.platform == "win32"
     items = [
         M(label="Chụp vùng để OCR", icon="▣", action=app.capture, accent=True),
+        M(label="Lăng kính dịch", icon="◫", checked=app.lens is not None, hint="Shift+bấm",
+          action=app.toggle_lens),
         SEP,
         M(label="Sau khi chụp", icon="↳",
           children=radio(AFTER, cfg.after_capture, lambda k: app.set_option("after_capture", k))),
@@ -69,11 +73,13 @@ def build_menu(app) -> list[MenuItem]:
         M(label="Công cụ dịch", icon="⇄", children=engines),
         M(label="Kiểu chữ xuất ra", icon="≡", children=out_children),
         SEP,
+        M(label="Giữ engine OCR sẵn sàng", icon="⚡",
+          children=radio(KEEP, cfg.keep_engine_min, lambda k: app.set_option("keep_engine_min", k))),
         M(label=f"Lịch sử ({len(hist)})", icon="↺", children=history_children),
         M(label="Cài đặt cửa sổ nổi", icon="⚙", children=float_children),
         M(label="Thông báo khi chép xong", icon="◔", checked=cfg.notify, action=lambda: app.toggle("notify")),
         M(label="Phím tắt toàn cục", icon="⌨", checked=bool(cfg.hotkey) if hot_ok else None, enabled=hot_ok,
-          hint=("Ctrl+Alt+O" if hot_ok else "chỉ Windows"), action=app.toggle_hotkey),
+          hint=("Ctrl+Alt+O / L" if hot_ok else "chỉ Windows"), action=app.toggle_hotkey),
         M(label="Khởi động cùng máy", icon="⚑", checked=app.autostart_enabled(), action=app.toggle_autostart),
         M(label="Mở file log", icon="▤", action=app.open_log),
         SEP,

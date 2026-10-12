@@ -28,8 +28,8 @@ def parse_hotkey(spec: str):
 
 
 class GlobalHotkey:
-    def __init__(self, spec: str, callback, on_error=None):
-        self.spec, self.callback, self.on_error = spec, callback, on_error
+    def __init__(self, spec: str, callback, on_error=None, hid: int = 1):
+        self.spec, self.callback, self.on_error, self.hid = spec, callback, on_error, hid
         self._tid = None
         self._thread = None
 
@@ -51,7 +51,7 @@ class GlobalHotkey:
 
             u = ctypes.windll.user32
             self._tid = ctypes.windll.kernel32.GetCurrentThreadId()
-            state["ok"] = bool(u.RegisterHotKey(None, 1, mods | MOD_NOREPEAT, vk))
+            state["ok"] = bool(u.RegisterHotKey(None, self.hid, mods | MOD_NOREPEAT, vk))
             ready.set()
             if not state["ok"]:
                 return
@@ -62,7 +62,7 @@ class GlobalHotkey:
                         self.callback()
                     except Exception:
                         pass
-            u.UnregisterHotKey(None, 1)
+            u.UnregisterHotKey(None, self.hid)
 
         self._thread = threading.Thread(target=loop, name="hotkey", daemon=True)
         self._thread.start()

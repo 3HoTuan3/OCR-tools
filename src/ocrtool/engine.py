@@ -22,6 +22,12 @@ from .tess import TesseractBackend, TesseractUnavailable
 from .textutil import choose_latin, has_cjk, has_latin_letters
 
 GAP_RATIO = 0.14  # khoảng trống > 14% chiều cao dòng thì coi là có dấu cách
+# Mặc định RapidOCR phóng cạnh NGẮN của ảnh lên >= 736px trước khi dò chữ: một vùng chụp 1100x28 (một dòng)
+# bị phóng ~26 lần (rồi bị chặn) nên rất chậm. Ở đây chọn theo từng ảnh: cạnh ngắn lên tối đa DET_MIN_SIDE px
+# nhưng không phóng quá DET_MAX_UPSCALE lần. Đo trên ảnh mẫu: nhanh hơn ~25-70%, sai số không tăng.
+DET_MIN_SIDE = 480
+DET_MAX_UPSCALE = 3.0
+FAST_PARAMS = {"Det.limit_type": "min", "Det.limit_side_len": DET_MIN_SIDE, "Rec.rec_batch_num": 12}
 _CLOSERS = set(")]}»,.;:!?，。：；！？）】」』")
 _OPENERS = set("([{«（【「『")
 
@@ -145,10 +151,11 @@ class OCREngine:
 
     def __init__(self, tesseract: bool = True, tess_lang: str = "vie+eng",
                  tessdata: str | None = None, auto_upscale: bool = True,
-                 min_score: float = 0.0):
+                 min_score: float = 0.0, rapid_params: dict | None = None, warmup: bool = False):
         from rapidocr import RapidOCR  # import chậm nên để trong hàm
 
-        self.rapid = RapidOCR(params={"Global.log_level": "error"})
+        params = {"Global.log_level": "error", **FAST_PARAMS, **(rapid_params or {})}
+        self.rapid = RapidOCR(params=params)
         self.auto_upscale = auto_upscale
         self.min_score = min_score
         self.warnings: list[str] = []
@@ -159,9 +166,32 @@ class OCREngine:
             except TesseractUnavailable as exc:
                 self.warnings.append(
                     f"Không dùng được Tesseract ({exc}). Tiếng Việt có dấu chồng sẽ bị rơi chữ.")
+        if warmup:
+            self.warm()
+
+    def warm(self) -> None:
+        """Chạy thử một ảnh nhỏ: lần nhận dạng đầu của onnxruntime chậm hơn nhiều (khởi tạo đồ thị)."""
+        img = np.full((64, 360, 3), 255, np.uint8)
+        cv2.putText(img, "Warm up 123", (10, 44), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 0), 2)
+        try:
+            self._paddle(img)
+        except Exception:
+            pass
 
     # ---------------------------------------------------------------- PaddleOCR
+    def _det_limit(self, img: np.ndarray) -> None:
+        det = getattr(self.rapid, "text_det", None)
+        if det is None and hasattr(self.rapid, "_load_det_model"):
+            try:
+                det = self.rapid._load_det_model()
+            except Exception:
+                det = None
+        if det is not None and getattr(det, "limit_type", None) == "min":
+            short = min(img.shape[:2])
+            det.limit_side_len = int(max(32, min(DET_MIN_SIDE, short * DET_MAX_UPSCALE)))
+
     def _paddle(self, img: np.ndarray) -> list[_Item]:
+        self._det_limit(img)
         r = self.rapid(img, return_word_box=True)
         if r is None or r.txts is None or len(r.txts) == 0:
             return []

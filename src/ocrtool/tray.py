@@ -133,8 +133,9 @@ def describe(result: dict) -> tuple[str, str] | None:
 class App:
     """Điều phối: cửa sổ nổi (Tk, luồng chính) + khay (pystray, luồng nền) + tiến trình chụp."""
 
-    def __init__(self, root, cfg: Config, command=None):
+    def __init__(self, root, cfg: Config, client=None, prewarm_ms: int = 2500):
         import queue
+        from .client import OcrClient
         from .menu import PopupMenu
         from .widget import FloatingButton
 
@@ -142,16 +143,24 @@ class App:
         self.tray_ok = False
         self.icon = None
         self.result_win = None
-        self.hotkey = None
+        self.lens = None
+        self.hotkeys: list = []
+        self.capturing = False
         self._bus: queue.Queue = queue.Queue()
-        self.launcher = JobLauncher(lambda r: self.post(lambda: self.handle_result(r)), command=command)
+        self.client = client or OcrClient(lang_fn=lambda: self.cfg.lang, idle_s=self._idle_s())
         self.menu = PopupMenu(root)
         self.widget = FloatingButton(root, cfg, on_click=self._on_click, on_menu=self.show_menu,
-                                     on_moved=self._on_moved)
+                                     on_moved=self._on_moved, on_alt_click=self.toggle_lens)
         if not cfg.float_visible:
             self.widget.hide()
         self.root.after(60, self._pump)
         self._start_hotkey()
+        if cfg.keep_engine_min != 0 and prewarm_ms >= 0:
+            self.root.after(prewarm_ms, self.client.warm)      # nạp sẵn engine: lần chụp đầu cũng nhanh
+
+    def _idle_s(self) -> float:
+        m = self.cfg.keep_engine_min
+        return -1 if m < 0 else m * 60
 
     # ------------------------------------------------------------ luồng
     def post(self, fn) -> None:
@@ -185,6 +194,10 @@ class App:
             self.widget.apply_opacity()
         elif name == "float_topmost":
             self.widget.apply_topmost()
+        elif name == "keep_engine_min":
+            self.client.idle_s = self._idle_s()
+            if value == 0 and not self.client.busy:
+                self.client.shutdown()
 
     def toggle(self, name: str) -> None:
         self.set_option(name, not getattr(self.cfg, name))
@@ -255,16 +268,118 @@ class App:
 
     # ------------------------------------------------------------ chụp
     def capture(self) -> None:
-        if self.launcher.busy:
+        """Ẩn ô nổi -> chụp màn hình -> lớp phủ chọn vùng (ngay trong app) -> OCR ở tiến trình engine thường trực."""
+        if self.capturing:
             log.info("Đang có một lần chụp, bỏ qua lần bấm này")
             return
+        self.capturing = True
         self.menu.close()
         self.widget.set_state("busy")
         if self.widget.visible:
-            self.widget.hide()                     # để cửa sổ nổi không lọt vào ảnh chụp
+            self.widget.hide()                     # để ô nổi không lọt vào ảnh chụp
             self.root.update_idletasks()
-        if not self.launcher.start():
-            self._restore()
+        try:
+            self.client.warm()                     # engine nạp song song trong lúc bạn kéo chọn vùng
+        except Exception:
+            log.exception("Không khởi động được tiến trình OCR")
+        self.root.after(max(0, self.cfg.delay_ms), self._grab_and_select)
+
+    def _grab_and_select(self) -> None:
+        from . import snip
+
+        if sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_TYPE") == "wayland":
+            def work():
+                from .capture import _grab_wayland
+                try:
+                    img = _grab_wayland()
+                except Exception as exc:  # noqa: BLE001
+                    self.post(lambda: self._capture_failed(str(exc)))
+                    return
+                self.post(lambda: self._on_selected(img))
+            threading.Thread(target=work, name="wayland-grab", daemon=True).start()
+            return
+        try:
+            full, mon = snip.grab_virtual_screen()
+            snip.open_selector(self.root, full, mon, self._on_selected)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Không chụp/chọn vùng được")
+            self._capture_failed(str(exc))
+
+    def _capture_failed(self, msg: str) -> None:
+        self.capturing = False
+        self.handle_result({"status": "error", "message": msg})
+
+    def _on_selected(self, img) -> None:
+        if img is None:
+            self.capturing = False
+            self.handle_result({"status": "cancelled"})
+            return
+        if self.cfg.float_visible:
+            self.widget.show()                     # hiện lại ô nổi (đang quay) trong lúc nhận dạng
+        self.client.ocr(img, lambda msg: self.post(lambda: self._finish_capture(img, msg)),
+                        min_score=self.cfg.min_score)
+
+    def _finish_capture(self, img, msg: dict) -> None:
+        from types import SimpleNamespace
+
+        from .clipboard import set_text
+        from .job import compose_text, save_history
+
+        self.capturing = False
+        if not msg.get("ok"):
+            self.handle_result({"status": "error", "message": msg.get("error", "Lỗi OCR")})
+            return
+        lines = [SimpleNamespace(**ln) for ln in msg.get("lines", [])]
+        text = compose_text(lines, self.cfg)
+        warnings = list(msg.get("warnings", []))
+        out = {"lines": len(lines), "chars": len(text), "warnings": warnings, "seconds": msg.get("seconds")}
+        if self.cfg.keep_history:
+            try:
+                save_history(img, text, history_dir(), self.cfg.history_max)
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"Không lưu được lịch sử: {exc}")
+        if not text.strip():
+            self.handle_result({"status": "empty", **out})
+            return
+        try:
+            set_text(text)
+        except Exception as exc:  # noqa: BLE001
+            self.handle_result({"status": "error", "message": str(exc)})
+            return
+        snippet = " ".join(text.split())
+        out.update(text=text, snippet=snippet[:90] + ("…" if len(snippet) > 90 else ""))
+        self.handle_result({"status": "ok", **out})
+
+    # ------------------------------------------------------------ lăng kính dịch
+    def toggle_lens(self) -> None:
+        if self.lens is not None:
+            self.lens.close()
+        else:
+            self.open_lens()
+
+    def open_lens(self) -> None:
+        from . import translate as tr
+        from .clipboard import set_text
+        from .job import join_text
+        from .lens import LensWindow
+
+        if self.lens is not None:
+            return
+        self.menu.close()
+
+        def ocr_fn(img, cb):
+            def done(msg):
+                if msg.get("ok"):
+                    cb(join_text([ln["text"] for ln in msg.get("lines", [])], True), None)
+                else:
+                    cb(None, msg.get("error", "Lỗi OCR"))
+            self.client.ocr(img, done, min_score=self.cfg.min_score)
+
+        self.lens = LensWindow(
+            self.root, self.cfg, ocr_fn=ocr_fn,
+            translate_fn=lambda t, tgt: tr.translate(t, tgt, engine=self.cfg.translate_engine),
+            copy_fn=set_text, save_cfg=self.save,
+            on_close=lambda w: setattr(self, "lens", None) if self.lens is w else None)
 
     def _restore(self) -> None:
         self.widget.set_state("idle")
@@ -341,13 +456,21 @@ class App:
     def _start_hotkey(self) -> None:
         from .hotkey import GlobalHotkey
 
-        if self.hotkey is not None:
-            self.hotkey.stop()
-            self.hotkey = None
-        if self.cfg.hotkey:
-            hk = GlobalHotkey(self.cfg.hotkey, lambda: self.post(self.capture),
-                              on_error=lambda m: self.post(lambda: self.toast(m)))
-            self.hotkey = hk if hk.start() else None
+        for hk in self.hotkeys:
+            hk.stop()
+        self.hotkeys = []
+        if not self.cfg.hotkey:
+            return
+        err = lambda m: self.post(lambda: self.toast(m))  # noqa: E731
+        for hid, spec, fn in ((1, self.cfg.hotkey, self.capture), (2, self.cfg.hotkey_lens, self.toggle_lens)):
+            if spec:
+                hk = GlobalHotkey(spec, lambda f=fn: self.post(f), on_error=err, hid=hid)
+                if hk.start():
+                    self.hotkeys.append(hk)
+
+    @property
+    def hotkey(self):
+        return self.hotkeys[0] if self.hotkeys else None
 
     def toggle_hotkey(self) -> None:
         from .appmenu import DEFAULT_HOTKEY
@@ -363,6 +486,8 @@ class App:
             Item = pystray.MenuItem
             menu = pystray.Menu(
                 Item("Chụp vùng để OCR", lambda i, it: self.post(self.capture), default=True),
+                Item("Lăng kính dịch", lambda i, it: self.post(self.toggle_lens),
+                     checked=lambda it: self.lens is not None),
                 Item("Hiện cửa sổ nổi", lambda i, it: self.post(self.show_widget),
                      checked=lambda it: self.cfg.float_visible),
                 Item("Khởi động cùng máy", lambda i, it: self.post(self.toggle_autostart),
@@ -386,8 +511,11 @@ class App:
 
     def quit(self) -> None:
         try:
-            if self.hotkey:
-                self.hotkey.stop()
+            for hk in self.hotkeys:
+                hk.stop()
+            if self.lens is not None:
+                self.lens.close()
+            self.client.close()
             if self.icon is not None:
                 self.icon.stop()
         except Exception:

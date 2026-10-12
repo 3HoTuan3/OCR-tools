@@ -1,6 +1,6 @@
 """Chọn vùng màn hình: chụp cả màn hình rồi hiện lớp phủ để kéo chọn (giống Snipping Tool).
 
-Được tiến trình `ocrtool.job` (do biểu tượng khay khởi động) gọi để người dùng kéo chọn vùng.
+App nền dùng `open_selector` (chạy ngay trong Tk của app, hiện tức thì); `ocrtool.job` dùng `select_region`.
 """
 from __future__ import annotations
 
@@ -57,33 +57,28 @@ def dim_rects(sel, w: int, h: int) -> list[tuple[int, int, int, int]]:
     return [(0, 0, w, t), (0, b, w, h), (0, t, l, b), (r, t, w, b)]
 
 
-def select_region(full: Image.Image, mon: dict) -> Image.Image | None:
-    """Hiện lớp phủ toàn màn hình; trả về ảnh vùng đã kéo chọn, hoặc None nếu huỷ (Esc / chuột phải)."""
-    import tkinter as tk
-
-    from PIL import ImageTk
-
+def build_selector(win, tk, ImageTk, full: Image.Image, mon: dict, finish) -> None:
+    """Dựng lớp phủ chọn vùng trên cửa sổ `win` (Tk hoặc Toplevel). Gọi finish(rect) / finish(None) đúng một lần."""
     w, h = mon["width"], mon["height"]
-    root = tk.Tk()
-    root.overrideredirect(True)
-    root.attributes("-topmost", True)
-    root.geometry(f"{w}x{h}+{mon['left']}+{mon['top']}")
-    canvas = tk.Canvas(root, width=w, height=h, highlightthickness=0, bd=0, cursor="crosshair")
+    win.overrideredirect(True)
+    win.attributes("-topmost", True)
+    win.geometry(f"{w}x{h}+{mon['left']}+{mon['top']}")
+    canvas = tk.Canvas(win, width=w, height=h, highlightthickness=0, bd=0, cursor="crosshair")
     canvas.pack()
-    photo = ImageTk.PhotoImage(full, master=root)
+    photo = ImageTk.PhotoImage(full, master=win)
     canvas._photo = photo                      # giữ tham chiếu, nếu không ảnh biến mất
     canvas.create_image(0, 0, image=photo, anchor="nw")
 
     dims = [canvas.create_rectangle(*r, fill="black", stipple="gray50", outline="")
             for r in dim_rects(None, w, h)]
     border = canvas.create_rectangle(0, 0, 0, 0, outline="#2f9bff", width=2, state="hidden")
-    hint_bg = canvas.create_rectangle(w // 2 - 230, 14, w // 2 + 230, 50, fill="#111827", outline="")
+    canvas.create_rectangle(w // 2 - 230, 14, w // 2 + 230, 50, fill="#111827", outline="")
     canvas.create_text(w // 2, 32, fill="white", font=("Segoe UI", 12),
                        text="Kéo chuột để chọn vùng chữ   •   Esc hoặc chuột phải để huỷ")
     size_bg = canvas.create_rectangle(0, 0, 0, 0, fill="#111827", outline="", state="hidden")
     size_txt = canvas.create_text(0, 0, fill="white", font=("Segoe UI", 10), state="hidden", anchor="nw")
 
-    state = {"start": None, "sel": None, "result": None}
+    state = {"start": None, "sel": None, "done": False}
 
     def refresh(sel):
         for item, rect in zip(dims, dim_rects(sel, w, h)):
@@ -105,6 +100,12 @@ def select_region(full: Image.Image, mon: dict) -> Image.Image | None:
         canvas.tag_raise(size_bg)
         canvas.tag_raise(size_txt)
 
+    def done(rect):
+        if state["done"]:
+            return
+        state["done"] = True
+        finish(rect)
+
     def on_press(e):
         state["start"] = (e.x, e.y)
 
@@ -114,27 +115,61 @@ def select_region(full: Image.Image, mon: dict) -> Image.Image | None:
             refresh(state["sel"])
 
     def on_release(e):
+        rect = None
         if state["start"]:
             l, t, r, b = norm_rect(*state["start"], e.x, e.y)
             l, t, r, b = max(l, 0), max(t, 0), min(r, w), min(b, h)
             if r - l >= MIN_SIZE and b - t >= MIN_SIZE:
-                state["result"] = (l, t, r, b)
-        root.destroy()
+                rect = (l, t, r, b)
+        done(rect)
 
     def cancel(_e=None):
-        state["result"] = None
-        root.destroy()
+        done(None)
 
     canvas.bind("<ButtonPress-1>", on_press)
     canvas.bind("<B1-Motion>", on_drag)
     canvas.bind("<ButtonRelease-1>", on_release)
     canvas.bind("<Button-3>", cancel)
-    root.bind("<Escape>", cancel)
-    root.update_idletasks()
-    root.focus_force()
-    root.lift()
+    win.bind("<Escape>", cancel)
+    win.update_idletasks()
+    win.focus_force()
+    win.lift()
+
+
+def select_region(full: Image.Image, mon: dict) -> Image.Image | None:
+    """Hiện lớp phủ toàn màn hình (Tk riêng, chặn tới khi xong); trả về ảnh vùng đã chọn hoặc None nếu huỷ."""
+    import tkinter as tk
+
+    from PIL import ImageTk
+
+    root = tk.Tk()
+    box: dict = {"rect": None}
+
+    def finish(rect):
+        box["rect"] = rect
+        root.destroy()
+
+    build_selector(root, tk, ImageTk, full, mon, finish)
     root.mainloop()
-    return full.crop(state["result"]) if state["result"] else None
+    return full.crop(box["rect"]) if box["rect"] else None
+
+
+def open_selector(master, full: Image.Image, mon: dict, on_done):
+    """Lớp phủ chọn vùng trên Tk đang chạy của app (không chặn, hiện tức thì). on_done(ảnh | None)."""
+    import tkinter as tk
+
+    from PIL import ImageTk
+
+    win = tk.Toplevel(master)
+
+    def finish(rect):
+        try:
+            win.destroy()
+        finally:
+            on_done(full.crop(rect) if rect else None)
+
+    build_selector(win, tk, ImageTk, full, mon, finish)
+    return win
 
 
 def snip_screen(delay_s: float = 0.0) -> Image.Image | None:

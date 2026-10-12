@@ -61,6 +61,8 @@ Gói hệ thống trên Linux (`tesseract-ocr`, `python3-tk`…) không bị đ�
 | Mục | Ý nghĩa |
 |---|---|
 | Chụp vùng để OCR | Giống bấm trái |
+| Lăng kính dịch | Bật/tắt khung dịch trực tiếp (xem bên dưới). Cũng mở bằng **Shift + bấm trái** hoặc **bấm chuột giữa** vào ô nổi |
+| Giữ engine OCR sẵn sàng | Luôn · 15 phút (mặc định) · 5 phút · Không giữ — đánh đổi tốc độ và RAM |
 | Sau khi chụp | *Hiện cửa sổ kết quả* (mặc định) · *Dịch ngay* (mở thẳng tab Dịch) · *Chỉ chép chữ* (như bản đầu, chỉ báo nhỏ) |
 | Dịch sang: … | Ngôn ngữ đích: Việt, English, 中文 (简/繁), 日本語, 한국어, Français, Deutsch, Español, Português, Русский, Italiano, ไทย, Bahasa Indonesia |
 | Công cụ dịch | *Google* (mặc định, cần Internet) hoặc *Argos* (offline, tuỳ chọn); *Tự chép chữ của tab đang xem* |
@@ -68,11 +70,11 @@ Gói hệ thống trên Linux (`tesseract-ocr`, `python3-tk`…) không bị đ�
 | Lịch sử (n) | 8 lần chụp gần nhất, bấm để chép lại; bật/tắt lưu lịch sử (20 lần gần nhất, ảnh + chữ); mở thư mục lịch sử |
 | Cài đặt cửa sổ nổi | Kích thước, độ trong suốt khi nghỉ, luôn ở trên cùng, đưa về góc màn hình |
 | Thông báo khi chép xong | Chỉ áp dụng khi chọn "Chỉ chép chữ" |
-| Phím tắt toàn cục | Ctrl+Alt+O để chụp ở bất kỳ đâu (chỉ Windows, mặc định tắt; đổi phím bằng `hotkey` trong config) |
+| Phím tắt toàn cục | Ctrl+Alt+O = chụp, Ctrl+Alt+L = bật/tắt lăng kính (chỉ Windows, mặc định tắt; đổi phím bằng `hotkey` / `hotkey_lens` trong config) |
 | Khởi động cùng máy | Ghi vào registry `HKCU\...\Run` |
 | Mở file log · Ẩn cửa sổ nổi · Thoát | Ẩn cần biểu tượng khay để mở lại (hoặc chạy lại `ocr-tray.bat`) |
 
-Biểu tượng khay: bấm trái = chụp; bấm phải = chụp / hiện cửa sổ nổi / khởi động cùng máy / log / thoát.
+Biểu tượng khay: bấm trái = chụp; bấm phải = chụp / lăng kính dịch / hiện cửa sổ nổi / khởi động cùng máy / log / thoát.
 
 Cấu hình nâng cao: `%LOCALAPPDATA%\ocrtool\config.json` (vd. `delay_ms` = thời gian chờ để cửa sổ nổi ẩn hẳn trước khi chụp,
 `hotkey` = `"ctrl+shift+f9"`, `float_opacity` = `0.5`).
@@ -89,11 +91,38 @@ tách chế độ **bảng** (giữ cột/hàng) với chế độ văn bản th
 phóng to ảnh nhỏ trước khi nhận dạng. Điều khác: PowerToys dùng engine `Windows.Media.Ocr` có sẵn của Windows (chỉ nhận các
 ngôn ngữ đã cài gói OCR), còn ở đây lõi OCR là bản lai PaddleOCR + Tesseract chạy offline, đọc chuẩn cả tiếng Việt có dấu.
 
-**Tài nguyên.** Mỗi lần chụp chạy trong **một tiến trình riêng** (`ocrtool.job`): chụp màn hình → hiện lớp phủ → nạp engine OCR
-song song trong lúc bạn đang kéo chuột → OCR → chép chữ → thoát. App nền lúc rảnh chỉ là cửa sổ nổi + khay nhỏ; RAM chỉ tăng
-(~230 MB, đo trên Linux) trong vài giây khi đang chụp rồi được trả lại.
+### Lăng kính dịch
+Một khung viền xanh nổi trên màn hình. Chữ nào lọt vào **bên trong khung** thì tự được đọc và dịch sang ngôn ngữ đã chọn,
+bản dịch hiện ở bảng tối ngay dưới khung. Lướt/cuộn trang tới đâu, khung đợi nội dung đứng yên (~0,5 s) rồi đọc lại; chữ không đổi thì không dịch lại.
 
-**Không muốn chạy app nền?** `ocr-screen.bat` làm đúng một lần chụp rồi thoát (không có biểu tượng). Tạo shortcut tới nó
+- **Mở / tắt:** Shift + bấm trái (hoặc bấm chuột giữa) vào ô nổi · menu chuột phải → *Lăng kính dịch* · khay → *Lăng kính dịch* · Ctrl+Alt+L (nếu bật phím tắt).
+- **Di chuyển:** kéo thanh tiêu đề. **Đổi cỡ:** kéo ô vuông nhỏ ở góc dưới phải. Vị trí và cỡ được nhớ.
+- **Nút trên thanh:** `→ Tiếng Việt ▾` đổi ngôn ngữ đích · `⧉` chép bản dịch · `⏸` tạm dừng/tiếp tục · `✕` đóng (hoặc `Esc`).
+- Phần giữa khung là rỗng thật: vẫn nhìn, bấm, cuộn trang xuyên qua được.
+- Dùng chung engine thường trực với chụp vùng, nên bật lăng kính thì engine luôn được giữ trong RAM khi khung đang mở.
+
+### Tốc độ và RAM
+Bản trước khởi động **một tiến trình Python mới cho mỗi lần chụp**: import thư viện, nạp model, chạy thử lần đầu. Phần này chiếm
+phần lớn hơn 10 giây bạn đếm được, còn bản thân việc nhận dạng chỉ 1–2 giây. Bản này:
+
+1. **Engine thường trực** (`ocrtool.worker`): nạp sẵn ~2,5 s sau khi mở app, các lần chụp sau dùng lại ngay. Không dùng 15 phút
+   thì tự thoát để trả RAM (~250 MB); lần chụp kế tiếp nạp lại song song trong lúc bạn kéo chuột.
+   Chỉnh trong menu *Giữ engine OCR sẵn sàng*.
+2. **Lớp phủ chọn vùng chạy ngay trong app**, không phải chờ mở tiến trình mới (chờ 120 ms để ô nổi ẩn hẳn, trước là 250 ms).
+3. **Dò chữ thông minh hơn:** không phóng to vô ích ảnh một dòng (trước bị phóng ~20 lần), nhận dạng theo lô lớn hơn.
+4. **Tesseract chạy song song** trên nhiều nhân CPU (tối đa 6 tiến trình).
+
+Đo trên máy thử 2 nhân (chậm hơn đa số PC):
+
+| | Bản cũ | Bản mới (engine đã nạp) |
+|---|---|---|
+| Một dòng chữ | ~8–10 s (khởi động + nạp + đọc) | **~0,7 s** |
+| Đoạn 6 dòng (ảnh mẫu) | ~10 s | **~1,3 s** |
+| Đoạn 20 dòng | ~15 s | **~4 s** (máy 4–8 nhân nhanh hơn nhờ Tesseract song song) |
+
+Sai số ký tự trên bộ ảnh mẫu: 0,24% → **0,14%** (không giảm chính xác).
+
+**Không muốn chạy app nền?** `ocr-screen.bat` làm đúng một lần chụp rồi thoát (chậm hơn vì phải nạp engine mỗi lần) (không có biểu tượng). Tạo shortcut tới nó
 (chuột phải → *Create shortcut*), vào *Properties* và gán *Shortcut key* (vd. `Ctrl+Alt+O`) là có phím tắt toàn hệ thống.
 
 Nếu biểu tượng không xuất hiện hoặc bấm không thấy gì: chạy `ocr-tray-debug.bat` để thấy lỗi, hoặc mở file log từ menu khay
@@ -131,10 +160,10 @@ CER = tỉ lệ ký tự sai (bỏ qua khoảng trắng và kiểu gạch ngang)
 
 | | PaddleOCR đơn lẻ | **Bản lai (mặc định)** |
 |---|---|---|
-| CER tổng | 11.9% | **0.4%** |
-| Ảnh chính xác 100% | 0/5 | 3/5 |
-| Thời gian | — | ~2.5 s/ảnh trên CPU (khởi tạo engine ~0.5 s, một lần) |
-| RAM đỉnh | — | ~460 MB (một engine, ảnh cỡ 1000×400) |
+| CER tổng | 11.9% | **0.2%** |
+| Ảnh chính xác 100% | 0/5 | 2/5 (3 ảnh còn lại sai ≤ 0,4%) |
+| Thời gian | — | ~1,3–1,7 s/ảnh mẫu trên CPU 2 nhân khi engine đã nạp (nạp engine ~2,5 s, một lần) |
+| RAM đỉnh | — | ~405 MB (một engine, ảnh cỡ 1000×400) |
 
 Đây là ảnh tổng hợp do chính dự án tạo, **không phải ảnh thực tế của bạn**. Hãy thử trên ảnh thật rồi đánh giá lại.
 
@@ -144,6 +173,7 @@ CER = tỉ lệ ký tự sai (bỏ qua khoảng trắng và kiểu gạch ngang)
 src/ocrtool/   tray.py (app nền: ô nổi + khay) · job.py (một lần chụp, tiến trình riêng) · snip.py (lớp phủ chọn vùng)
                engine.py (lõi lai) · tess.py (gọi Tesseract) · textutil.py (so khớp/chọn kết quả)
                clipboard.py · config.py · autostart.py · capture.py (Wayland, toast) · doctor.py (kiểm tra cài đặt)
+               worker.py + client.py (engine thường trực) · lens.py (lăng kính dịch)
                widget.py (ô nổi) · menu.py + appmenu.py (menu chuột phải) · result.py (cửa sổ kết quả)
                translate.py (dịch) · layout.py (chế độ bảng) · hotkey.py · icons.py · uiutil.py
 setup / uninstall: setup.bat · setup.sh · uninstall.bat · uninstall.sh
@@ -161,9 +191,10 @@ samples/       ảnh mẫu + đáp án .txt
 - Mỗi lần OCR thành công, chữ thay thế nội dung clipboard hiện có (bản cũ vẫn xem được trong Win+V nếu đã bật lịch sử clipboard).
 - Muốn nhẹ hơn nữa: `python scripts/get_tessdata.py --fast` (xoá `tessdata/*.traineddata` trước) —
   nhanh và nhỏ hơn nhưng sai số cao hơn một chút.
-- Mới kiểm thử trên Linux (88 test tự động): logic chụp/OCR/dịch/bảng, và toàn bộ giao diện (ô nổi, menu, cửa sổ kết quả, lớp phủ chọn vùng)
+- Mới kiểm thử trên Linux (105 test tự động): logic chụp/OCR/dịch/bảng, engine thường trực, và toàn bộ giao diện (ô nổi, menu, cửa sổ kết quả,
+  lớp phủ chọn vùng, lăng kính dịch)
   bằng tkinter **thật** trên màn hình ảo. **Chưa chạy thử trên Windows thật**: bấm ra ngoài để đóng menu, ô nổi trong suốt ở góc bo,
-  kéo ô nổi giữa nhiều màn hình khác tỉ lệ, phím tắt toàn cục, tự khởi động, `setup.bat` / `uninstall.bat`. Nếu menu không đóng khi bấm ra ngoài,
+  kéo ô nổi/lăng kính giữa nhiều màn hình khác tỉ lệ, phím tắt toàn cục, tiến trình engine chạy ẩn, tự khởi động, `setup.bat` / `uninstall.bat`. Nếu menu không đóng khi bấm ra ngoài,
   nhấn `Esc` hoặc bấm lại vào ô nổi, rồi báo mình.
 - Dịch bằng Google cần Internet và là cổng không chính thức; Argos chưa được thử trong môi trường này.
 - Chế độ bảng là heuristic theo toạ độ dòng: bảng có đường kẻ, ô gộp hoặc cột canh phải có thể lệch cột.

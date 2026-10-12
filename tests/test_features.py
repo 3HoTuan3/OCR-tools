@@ -201,3 +201,114 @@ class SingleInstanceTests(unittest.TestCase):
             time.sleep(0.05)
         lock.close()
         self.assertEqual(got, [1])
+
+
+FAKE_WORKER = r"""
+import sys, json, time, os
+for raw in sys.stdin:
+    req = json.loads(raw)
+    if req.get("op") == "quit":
+        break
+    if req.get("op") == "die":
+        os._exit(3)
+    if req.get("op") == "ocr" and "slow" in req.get("path", ""):
+        time.sleep(5)
+    out = {"id": req["id"], "ok": True, "op": req["op"], "lang": req.get("lang"), "lines": [{"text": "hi", "box": [[0,0],[1,0],[1,1],[0,1]], "score": 1}]}
+    sys.stdout.write(json.dumps(out) + "\n"); sys.stdout.flush()
+"""
+
+
+class ClientTests(unittest.TestCase):
+    def make(self, **kw):
+        from ocrtool.client import OcrClient
+        c = OcrClient(command=lambda: [sys.executable, "-c", FAKE_WORKER], **kw)
+        self.addCleanup(c.close)
+        return c
+
+    def call(self, c, img=None, **opts):
+        import threading
+        from PIL import Image
+        ev, box = threading.Event(), {}
+        c.ocr(img or Image.new("RGB", (10, 10)), lambda m: (box.update(m), ev.set()), **opts)
+        self.assertTrue(ev.wait(15))
+        return box
+
+    def test_roundtrip_reuses_process_and_cleans_files(self):
+        c = self.make(lang_fn=lambda: "vie+eng")
+        r = self.call(c, min_score=0.5)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["lang"], "vie+eng")
+        pid = c._proc.pid
+        self.call(c)
+        self.assertEqual(c._proc.pid, pid)            # dùng lại tiến trình đã nạp engine
+        self.assertEqual(list(c._tmp.glob("req_*.png")), [])
+        self.assertFalse(c.busy)
+
+    def test_worker_crash_reports_error_and_restarts(self):
+        import threading
+        c = self.make()
+        self.call(c)
+        ev, box = threading.Event(), {}
+        c._request({"op": "die"}, lambda m: (box.update(m), ev.set()))
+        self.assertTrue(ev.wait(10))
+        self.assertFalse(box["ok"])
+        self.assertIn("dừng", box["error"])
+        self.assertTrue(self.call(c)["ok"])            # tự khởi động lại
+
+    def test_idle_shutdown(self):
+        import time
+        c = self.make(idle_s=1)
+        self.call(c)
+        self.assertTrue(c.running)
+        for _ in range(60):
+            if not c.running:
+                break
+            time.sleep(0.1)
+        self.assertFalse(c.running)
+
+    def test_no_keep_mode_exits_after_each_request(self):
+        import time
+        c = self.make(idle_s=0)
+        self.call(c)
+        for _ in range(30):
+            if not c.running:
+                break
+            time.sleep(0.1)
+        self.assertFalse(c.running)
+
+    def test_timeout(self):
+        import ocrtool.client as cl
+        from PIL import Image
+        c = self.make()
+        with mock.patch.object(cl, "REQUEST_TIMEOUT_S", 0.5):
+            img = Image.new("RGB", (5, 5))
+            orig = c._tmp
+            import threading
+            ev, box = threading.Event(), {}
+            path = orig / "slow.png"
+            img.save(path)
+            c._request({"op": "ocr", "path": str(path)}, lambda m: (box.update(m), ev.set()), str(path))
+            self.assertTrue(ev.wait(10))
+        self.assertIn("Quá thời gian", box["error"])
+
+
+class RealWorkerTest(unittest.TestCase):
+    """Chạy tiến trình engine thật (cần rapidocr + Tesseract)."""
+
+    def test_real_engine(self):
+        try:
+            import rapidocr  # noqa: F401
+        except Exception:
+            self.skipTest("không có rapidocr")
+        import threading
+        from PIL import Image
+        from ocrtool.client import OcrClient
+        sample = os.path.join(os.path.dirname(__file__), "..", "samples", "sample_mixed.png")
+        c = OcrClient()
+        self.addCleanup(c.close)
+        c.warm()
+        ev, box = threading.Event(), {}
+        c.ocr(Image.open(sample), lambda m: (box.update(m), ev.set()))
+        self.assertTrue(ev.wait(120))
+        self.assertTrue(box.get("ok"), box.get("error"))
+        self.assertGreater(len(box["lines"]), 2)

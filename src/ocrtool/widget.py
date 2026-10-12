@@ -11,9 +11,10 @@ DRAG_PX = 4
 
 
 class FloatingButton:
-    def __init__(self, root, cfg, on_click, on_menu, on_moved):
+    def __init__(self, root, cfg, on_click, on_menu, on_moved, on_alt_click=None):
         self.root, self.cfg = root, cfg
         self.on_click, self.on_menu, self.on_moved = on_click, on_menu, on_moved
+        self.on_alt_click = on_alt_click or (lambda: None)     # Shift+bấm trái hoặc bấm chuột giữa
         self.state = "idle"
         self._press = None
         self._dragging = False
@@ -37,6 +38,7 @@ class FloatingButton:
         self.canvas.bind("<B1-Motion>", self._on_motion)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
         self.canvas.bind("<Button-3>", lambda e: self.on_menu(e.x_root, e.y_root))
+        self.canvas.bind("<Button-2>", lambda e: self.on_alt_click())
         self.canvas.bind("<Enter>", lambda e: self._set_hover(True))
         self.canvas.bind("<Leave>", lambda e: self._set_hover(False))
         self.apply_size()
@@ -124,6 +126,7 @@ class FloatingButton:
     # ------------------------------------------------------------ chuột
     def _on_press(self, e) -> None:
         self._press = (e.x_root, e.y_root, self.root.winfo_x(), self.root.winfo_y())
+        self._shift = bool(getattr(e, "state", 0) & 0x0001)
         self._dragging = False
 
     def _on_motion(self, e) -> None:
@@ -145,7 +148,10 @@ class FloatingButton:
         if was_drag:
             self.on_moved(*self._last)
         elif 0 <= e.x < self.size and 0 <= e.y < self.size:
-            self.on_click()
+            if getattr(self, "_shift", False):
+                self.on_alt_click()
+            else:
+                self.on_click()
 
 
 def show_toast(root, message: str, ms: int = 2200, near: tuple[int, int] | None = None):

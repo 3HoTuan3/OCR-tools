@@ -25,6 +25,7 @@ if HAVE_TK:
     from ocrtool.config import Config
     from ocrtool.menu import SEP, MenuItem, PopupMenu
     from ocrtool.result import ResultWindow
+    from ocrtool.lens import LensWindow, sig_diff, signature
     from ocrtool.tray import App
     from ocrtool.widget import FloatingButton
 
@@ -303,33 +304,120 @@ class ResultWindowTests(UITestBase):
         self.assertEqual(closed, [w])
 
 
+class FakeClient:
+    """Thay OcrClient: ghi lại yêu cầu, trả lời bằng tay qua reply()."""
+
+    def __init__(self):
+        self.requests, self.warms, self.idle_s, self.closed = [], 0, 900, False
+
+    busy = property(lambda self: bool(self.requests))
+    running = property(lambda self: self.warms > 0)
+
+    def warm(self):
+        self.warms += 1
+
+    def ocr(self, img, cb, **opts):
+        self.requests.append((img, cb, opts))
+
+    def reply(self, msg):
+        img, cb, _ = self.requests.pop(0)
+        cb(msg)
+
+    def shutdown(self):
+        pass
+
+    def close(self):
+        self.closed = True
+
+
+def ok_lines(*texts):
+    return {"ok": True, "lines": [{"text": t, "score": 0.9, "box": [[0, 20 * i], [100, 20 * i], [100, 20 * i + 15],
+                                                                     [0, 20 * i + 15]], "source": "paddle"}
+                                  for i, t in enumerate(texts)], "warnings": [], "seconds": 0.3}
+
+
+def find_overlay(root):
+    for w in root.winfo_children():
+        if isinstance(w, tk.Toplevel):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Canvas) and str(c.cget("cursor")) == "crosshair":
+                    return c
+    return None
+
+
 class AppTests(UITestBase):
-    def make_app(self, command=None, **cfgkw):
+    def make_app(self, **cfgkw):
         cfg = Config()
         cfg.float_x, cfg.float_y = 100, 100
+        cfg.delay_ms = 10
         for k, v in cfgkw.items():
             setattr(cfg, k, v)
-        app = App(self.root, cfg, command=command)
+        self.client = FakeClient()
+        app = App(self.root, cfg, client=self.client, prewarm_ms=-1)
         self.root.update()
         return app
 
-    @staticmethod
-    def job_cmd(result: dict, delay=0.0):
-        code = ("import sys,json,time;time.sleep(%r);p=sys.argv[sys.argv.index('--result')+1];"
-                "open(p,'w',encoding='utf-8').write(json.dumps(%r))" % (delay, result))
-        return lambda: [sys.executable, "-c", code]
+    def drag_select(self, canvas, a=(20, 20), b=(220, 90)):
+        canvas.event_generate("<ButtonPress-1>", x=a[0], y=a[1], when="now")
+        canvas.event_generate("<B1-Motion>", x=b[0], y=b[1], when="now")
+        canvas.event_generate("<ButtonRelease-1>", x=b[0], y=b[1], when="now")
 
-    def test_capture_flow_opens_result_window(self):
-        res = {"status": "ok", "text": "Xin chào", "chars": 8, "lines": 1, "warnings": [], "snippet": "Xin chào"}
-        app = self.make_app(command=self.job_cmd(res, 0.3))
-        app.capture()
-        self.assertFalse(app.widget.visible)             # ẩn khi chụp để khỏi lọt vào ảnh
-        self.assertEqual(app.widget.state, "busy")
-        app.capture()                                    # bấm lần nữa khi đang chụp: bỏ qua
-        self.assertTrue(pump(self.root, lambda: app.result_win is not None, 15))
-        self.assertTrue(app.widget.visible)
+    def test_capture_flow_real_overlay_and_warm_engine(self):
+        app = self.make_app()
+        with mock.patch("ocrtool.clipboard.set_text") as cp:
+            app.capture()
+            self.assertFalse(app.widget.visible)             # ẩn khi chụp để khỏi lọt vào ảnh
+            self.assertEqual(app.widget.state, "busy")
+            self.assertEqual(self.client.warms, 1)           # engine nạp song song lúc kéo chọn
+            app.capture()                                    # bấm lần nữa khi đang chụp: bỏ qua
+            self.assertTrue(pump(self.root, lambda: find_overlay(self.root) is not None))
+            self.drag_select(find_overlay(self.root))
+            self.assertTrue(pump(self.root, lambda: self.client.requests))
+            img = self.client.requests[0][0]
+            self.assertEqual(img.size, (200, 70))
+            self.assertTrue(app.widget.visible)              # hiện lại (đang quay) trong lúc nhận dạng
+            self.client.reply(ok_lines("Xin chào", "thế giới"))
+            self.assertTrue(pump(self.root, lambda: app.result_win is not None))
+            cp.assert_called_once_with("Xin chào\nthế giới")
         self.assertEqual(app.widget.state, "idle")
-        self.assertEqual(app.result_win.current_text(), "Xin chào")
+        self.assertFalse(app.capturing)
+        self.assertEqual(app.result_win.current_text(), "Xin chào\nthế giới")
+        self.assertIsNone(find_overlay(self.root))
+
+    def test_capture_cancel_with_escape(self):
+        app = self.make_app()
+        app.capture()
+        self.assertTrue(pump(self.root, lambda: find_overlay(self.root) is not None))
+        find_overlay(self.root).winfo_toplevel().event_generate("<Escape>", when="now")
+        self.assertTrue(pump(self.root, lambda: not app.capturing))
+        self.assertEqual(self.client.requests, [])
+        self.assertTrue(app.widget.visible)
+
+    def test_capture_ocr_error_and_empty(self):
+        app = self.make_app()
+        with mock.patch.object(app, "toast") as toast, mock.patch("ocrtool.clipboard.set_text") as cp:
+            for reply in ({"ok": False, "error": "Traceback\nboom"}, ok_lines()):
+                app.capture()
+                pump(self.root, lambda: find_overlay(self.root) is not None)
+                self.drag_select(find_overlay(self.root))
+                pump(self.root, lambda: self.client.requests)
+                self.client.reply(reply)
+                pump(self.root, lambda: not app.capturing)
+            self.assertEqual(toast.call_count, 2)
+            cp.assert_not_called()
+
+    def test_table_mode_and_history_on_capture(self):
+        from ocrtool.config import history_dir
+        app = self.make_app(table_mode=True, after_capture="copy")
+        msg = {"ok": True, "warnings": [], "lines": [
+            {"text": "A", "score": 1, "box": [[0, 0], [20, 0], [20, 15], [0, 15]]},
+            {"text": "B", "score": 1, "box": [[200, 0], [220, 0], [220, 15], [200, 15]]}]}
+        from PIL import Image
+        with mock.patch("ocrtool.clipboard.set_text") as cp, mock.patch.object(app, "toast"):
+            app.capturing = True
+            app._finish_capture(Image.new("RGB", (30, 20), "white"), msg)
+        cp.assert_called_once_with("A\tB")
+        self.assertEqual(len(list(history_dir().glob("*.txt"))), 1)
 
     def test_translate_mode_starts_on_translate_tab(self):
         app = self.make_app(after_capture="translate")
@@ -361,7 +449,10 @@ class AppTests(UITestBase):
     def test_hidden_widget_stays_hidden_after_capture(self):
         app = self.make_app(float_visible=False)
         self.assertFalse(app.widget.visible)
-        app.handle_result({"status": "cancelled"})
+        app.capture()
+        pump(self.root, lambda: find_overlay(self.root) is not None)
+        find_overlay(self.root).winfo_toplevel().event_generate("<Escape>", when="now")
+        pump(self.root, lambda: not app.capturing)
         self.assertFalse(app.widget.visible)
 
     def test_hide_requires_tray(self):
@@ -455,6 +546,32 @@ class AppTests(UITestBase):
         self.assertTrue(app.menu.is_open)
         app.menu.close()
 
+    def test_lens_toggle_from_menu_shift_click_and_quit(self):
+        app = self.make_app()
+        app.toggle_lens()
+        self.assertIsNotNone(app.lens)
+        labels = {i.label: i for i in build_menu(app) if not i.separator}
+        self.assertTrue(labels["Lăng kính dịch"].checked)
+        app.toggle_lens()
+        self.assertIsNone(app.lens)
+        app.widget._on_press(SimpleNamespace(x_root=110, y_root=110, x=5, y=5, state=0x0001))   # Shift giữ
+        app.widget._on_release(SimpleNamespace(x_root=110, y_root=110, x=5, y=5))
+        self.assertIsNotNone(app.lens)
+        app.widget.canvas.event_generate("<Button-2>", x=3, y=3)                         # chuột giữa
+        self.root.update()
+        self.assertIsNone(app.lens)
+        app.open_lens()
+        app.quit()
+        self.assertIsNone(app.lens)
+        self.assertTrue(self.client.closed)
+
+    def test_keep_engine_option(self):
+        app = self.make_app()
+        app.set_option("keep_engine_min", 5)
+        self.assertEqual(self.client.idle_s, 300)
+        app.set_option("keep_engine_min", -1)
+        self.assertEqual(self.client.idle_s, -1)
+
     def test_toggle_hotkey_noop_off_windows(self):
         app = self.make_app()
         app.toggle_hotkey()
@@ -462,6 +579,119 @@ class AppTests(UITestBase):
         self.assertIsNone(app.hotkey)                                  # không phải Windows
         app.toggle_hotkey()
         self.assertEqual(app.cfg.hotkey, "")
+
+
+
+class LensTests(UITestBase):
+    def make(self, frames=None, **kw):
+        from PIL import Image, ImageDraw
+        cfg = Config()
+        cfg.lens_x, cfg.lens_y, cfg.lens_w, cfg.lens_h = 200, 200, 300, 80
+        self.frames = frames or {"img": Image.new("RGB", (300, 80), "white")}
+        self.ocr_calls, self.tr_calls, self.copied = [], [], []
+
+        def grab(rect):
+            self.rects.append(rect)
+            return self.frames["img"]
+
+        def ocr(img, cb):
+            self.ocr_calls.append(cb)
+
+        def translate(text, target):
+            self.tr_calls.append((text, target))
+            return tr.Translation(f"<{target}> {text}", "en")
+        self.rects = []
+        lens = LensWindow(self.root, cfg, ocr, translate, self.copied.append, grab_fn=grab, interval_ms=10**6, **kw)
+        self.root.update()
+        return lens
+
+    def frame(self, text):
+        from PIL import Image, ImageDraw
+        im = Image.new("RGB", (300, 80), "white")
+        ImageDraw.Draw(im).rectangle((10, 10, 10 + 25 * len(text), 40), fill="black")
+        return im
+
+    def test_layout_hole_is_free(self):
+        lens = self.make()
+        x, y, w, h = lens.rect()
+        self.assertEqual((x, y, w, h), (200, 200, 300, 80))
+        for part in (lens.top, lens.left, lens.right, lens.bottom):
+            px, py = part.winfo_rootx(), part.winfo_rooty()
+            pw, ph = part.winfo_width(), part.winfo_height()
+            overlap = not (px + pw <= x or px >= x + w or py + ph <= y or py >= y + h)
+            self.assertFalse(overlap, "khung không được che vùng đọc")
+        self.assertGreaterEqual(lens.panel.winfo_rooty(), y + h)
+
+    def test_ocr_only_after_content_settles_then_translates(self):
+        lens = self.make()
+        lens.step()                                # khung đầu tiên: "đổi" so với không có gì -> chờ
+        self.assertEqual(self.ocr_calls, [])
+        lens.step()                                # đứng yên -> đọc
+        self.assertEqual(len(self.ocr_calls), 1)
+        self.assertEqual(self.rects[-1], (200, 200, 300, 80))
+        lens.step()                                # đang chờ OCR -> không gửi thêm
+        self.assertEqual(len(self.ocr_calls), 1)
+        self.ocr_calls.pop()("Hello world", None)
+        self.assertTrue(pump(self.root, lambda: lens.translated))
+        self.assertEqual(lens.translated, "<vi> Hello world")
+        self.assertEqual(lens.out_lbl.cget("text"), "<vi> Hello world")
+        lens.step(); lens.step()                   # không đổi gì -> không đọc lại
+        self.assertEqual(self.ocr_calls, [])
+        self.frames["img"] = self.frame("scroll")  # cuộn trang
+        lens.step()
+        self.assertEqual(self.ocr_calls, [])       # đang chuyển động -> chờ
+        lens.step()
+        self.assertEqual(len(self.ocr_calls), 1)
+        self.ocr_calls.pop()("Hello world", None)  # cùng chữ -> không dịch lại
+        pump(self.root, lambda: False, 0.2)
+        self.assertEqual(len(self.tr_calls), 1)
+
+    def test_language_change_retranslates_and_flips(self):
+        lens = self.make()
+        lens.step(); lens.step()
+        self.ocr_calls.pop()("Xin chào các bạn", None)
+        self.assertTrue(pump(self.root, lambda: lens.translated))
+        self.assertEqual(self.tr_calls[-1], ("Xin chào các bạn", "en"))      # chữ Việt + đích Việt -> sang English
+        lens.set_target("ja")
+        self.assertTrue(pump(self.root, lambda: len(self.tr_calls) == 2))
+        self.assertEqual(self.tr_calls[-1][1], "ja")
+        self.assertEqual(lens.cfg.target_lang, "ja")
+
+    def test_pause_errors_copy_and_close(self):
+        closed = []
+        lens = self.make(on_close=closed.append)
+        lens.toggle_pause()
+        lens.step(); lens.step()
+        self.assertEqual(self.ocr_calls, [])
+        lens.toggle_pause()
+        lens.step(); lens.step()
+        self.ocr_calls.pop()(None, "Traceback\nOCR hỏng")
+        self.assertTrue(pump(self.root, lambda: "OCR hỏng" in lens.status.cget("text")))
+        self.frames["img"] = self.frame("x"); lens.step(); lens.step()
+        self.ocr_calls.pop()("", None)
+        self.assertTrue(pump(self.root, lambda: "Không thấy chữ" in lens.status.cget("text")))
+        lens.translated = "abc"
+        lens.copy_translation()
+        self.assertEqual(self.copied, ["abc"])
+        lens.close(); lens.close()
+        self.assertEqual(closed, [lens])
+
+    def test_move_and_resize_save_geometry(self):
+        saved = []
+        lens = self.make(save_cfg=lambda: saved.append(1))
+        ev = lambda x, y: SimpleNamespace(x_root=x, y_root=y)  # noqa: E731
+        lens._move_start(ev(250, 190)); lens._move(ev(300, 240)); lens._drag_end()
+        self.assertEqual(lens.rect()[:2], (250, 250))
+        lens._resize_start(ev(0, 0)); lens._resize(ev(-1000, -1000)); lens._drag_end()
+        self.assertEqual(lens.rect()[2:], (80, 28))                         # cỡ tối thiểu
+        self.assertEqual((lens.cfg.lens_x, lens.cfg.lens_w), (250, 80))
+        self.assertEqual(len(saved), 2)
+
+    def test_signature_diff(self):
+        a, b = signature(self.frame("aaa")), signature(self.frame("aaaaaaa"))
+        self.assertEqual(sig_diff(a, a), 0)
+        self.assertGreater(sig_diff(a, b), 3)
+        self.assertEqual(sig_diff(None, a), 255)
 
 
 if __name__ == "__main__":

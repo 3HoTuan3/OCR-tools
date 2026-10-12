@@ -14,6 +14,13 @@ import numpy as np
 from PIL import Image
 
 
+MIN_LINES_PER_PROC = 3     # ít dòng quá thì một tiến trình là đủ (nạp model cũng tốn ~0.1 s)
+
+
+def default_workers() -> int:
+    return max(1, min(6, os.cpu_count() or 2))
+
+
 class TesseractUnavailable(RuntimeError):
     pass
 
@@ -54,8 +61,9 @@ def find_executable() -> str | None:
 
 class TesseractBackend:
     def __init__(self, exe: str, lang: str = "vie+eng", tessdata: str | None = None,
-                 timeout: float = 180.0):
+                 timeout: float = 180.0, workers: int | None = None):
         self.exe = exe
+        self.workers = workers or default_workers()
         self.lang = lang
         self.tessdata = tessdata
         self.timeout = timeout
@@ -113,26 +121,45 @@ class TesseractBackend:
 
     # ------------------------------------------------------------------- core
     def recognize_batch(self, images: list[np.ndarray]) -> list[tuple[str, float]]:
-        """Nhận dạng nhiều ảnh một dòng chữ. Trả về [(text, conf 0-100), ...] đúng thứ tự."""
+        """Nhận dạng nhiều ảnh một dòng chữ. Trả về [(text, conf 0-100), ...] đúng thứ tự.
+
+        Chia thành vài nhóm chạy song song (mỗi tiến trình Tesseract một nhân CPU) cho nhanh hơn.
+        """
         if not images:
             return []
+        n = len(images)
+        k = max(1, min(self.workers, (n + MIN_LINES_PER_PROC - 1) // MIN_LINES_PER_PROC))
+        bounds = [(i * n // k, (i + 1) * n // k) for i in range(k)]
         with tempfile.TemporaryDirectory(prefix="ocrtool_") as tmp:
-            paths = []
-            for i, arr in enumerate(images):
-                p = os.path.join(tmp, f"line_{i:04d}.png")
-                Image.fromarray(arr).save(p)
-                paths.append(p)
-            list_file = os.path.join(tmp, "list.txt")
-            with open(list_file, "w", encoding="utf-8") as fh:
-                fh.write("\n".join(paths))
-            cmd = [self.exe, list_file, "stdout", "-l", self.lang, "--psm", "7",
-                   "-c", "tessedit_create_tsv=1", "-c", "tessedit_create_txt=0"]
-            proc = subprocess.run(cmd, capture_output=True, timeout=self.timeout,
-                                  env=self._env(), **self._popen_kwargs())
-        if proc.returncode != 0 and not proc.stdout:
-            raise TesseractUnavailable(
-                "Tesseract lỗi: " + proc.stderr.decode("utf-8", "replace")[:300])
-        return self._parse_tsv(proc.stdout.decode("utf-8", "replace"), len(images))
+            procs = []
+            for ci, (a, b) in enumerate(bounds):
+                paths = []
+                for i in range(a, b):
+                    p = os.path.join(tmp, f"line_{i:04d}.png")
+                    Image.fromarray(images[i]).save(p, compress_level=1)
+                    paths.append(p)
+                list_file = os.path.join(tmp, f"list_{ci}.txt")
+                with open(list_file, "w", encoding="utf-8") as fh:
+                    fh.write("\n".join(paths))
+                cmd = [self.exe, list_file, "stdout", "-l", self.lang, "--psm", "7",
+                       "-c", "tessedit_create_tsv=1", "-c", "tessedit_create_txt=0"]
+                procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                              stdin=subprocess.DEVNULL, env=self._env(),
+                                              **self._popen_kwargs()))
+            out: list[tuple[str, float]] = []
+            try:
+                for proc, (a, b) in zip(procs, bounds):
+                    stdout, stderr = proc.communicate(timeout=self.timeout)
+                    if proc.returncode != 0 and not stdout:
+                        raise TesseractUnavailable(
+                            "Tesseract lỗi: " + stderr.decode("utf-8", "replace")[:300])
+                    out.extend(self._parse_tsv(stdout.decode("utf-8", "replace"), b - a))
+            finally:
+                for proc in procs:
+                    if proc.poll() is None:
+                        proc.kill()
+                        proc.wait()
+        return out
 
     @staticmethod
     def _parse_tsv(tsv: str, n: int) -> list[tuple[str, float]]:
