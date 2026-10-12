@@ -38,6 +38,19 @@ Khay hệ thống trên GNOME cần extension AppIndicator.
 Kiểm tra cài đặt: `.venv\Scripts\python.exe -m ocrtool` (Windows) hoặc `.venv/bin/python -m ocrtool` (Linux).
 `setup` cũng tự chạy lệnh này ở cuối.
 
+## Gỡ cài đặt
+
+```bat
+uninstall.bat        rem Windows (hỏi từng bước; thêm /y để gỡ nhanh, không hỏi)
+```
+```bash
+bash uninstall.sh    # Linux (thêm -y để gỡ nhanh)
+```
+Script sẽ: tắt app khay đang chạy → bỏ mục "khởi động cùng máy" → xoá `.venv`, `tessdata` và file build trong thư mục dự án →
+xoá dữ liệu người dùng (cấu hình, lịch sử, log; có hỏi) → trên Windows hỏi có gỡ luôn Tesseract (cài bằng winget) không →
+hỏi có xoá cả thư mục dự án không. Chế độ nhanh (`/y`, `-y`) giữ lại Tesseract và thư mục dự án.
+Gói hệ thống trên Linux (`tesseract-ocr`, `python3-tk`…) không bị đụng tới.
+
 ## Tuỳ chỉnh app khay
 
 Bấm chuột phải vào biểu tượng:
@@ -109,6 +122,7 @@ CER = tỉ lệ ký tự sai (bỏ qua khoảng trắng và kiểu gạch ngang)
 src/ocrtool/   tray.py (app khay) · job.py (một lần chụp, tiến trình riêng) · snip.py (lớp phủ chọn vùng)
                engine.py (lõi lai) · tess.py (gọi Tesseract) · textutil.py (so khớp/chọn kết quả)
                clipboard.py · config.py · autostart.py · capture.py (Wayland, toast) · doctor.py (kiểm tra cài đặt)
+setup / uninstall: setup.bat · setup.sh · uninstall.bat · uninstall.sh
 scripts/       get_tessdata.py · evaluate.py · make_samples.py
 tests/         python -m unittest discover -s tests -v
 samples/       ảnh mẫu + đáp án .txt
