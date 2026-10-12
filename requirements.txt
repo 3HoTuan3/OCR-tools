@@ -1,0 +1,8 @@
+rapidocr>=3.10,<4
+onnxruntime>=1.20
+numpy>=1.26
+pillow>=10.0
+opencv-python-headless>=4.9
+mss>=9.0
+pyperclip>=1.8
+pystray>=0.19

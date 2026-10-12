@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocrtool"
+version = "0.1.0"
+description = "OCR offline nhẹ cho tiếng Việt, Anh, Trung (PaddleOCR v6 + Tesseract)"
+requires-python = ">=3.9"
+dependencies = [
+  "rapidocr>=3.10,<4",
+  "onnxruntime>=1.20",
+  "numpy>=1.26",
+  "pillow>=10.0",
+  "opencv-python-headless>=4.9",
+  "mss>=9.0",
+  "pyperclip>=1.8",
+  "pystray>=0.19",
+]
+
+[project.scripts]
+ocr = "ocrtool.cli:main"
+ocr-tray = "ocrtool.tray:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
