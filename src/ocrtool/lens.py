@@ -24,7 +24,7 @@ import tkinter.font as tkfont
 from . import translate as tr
 from .menu import MenuItem, PopupMenu
 from .textutil import has_cjk
-from .uiutil import THEME, WIN, clamp_pos, click_through, exclude_from_capture, font, scale, virtual_screen
+from .uiutil import THEME, WIN, clamp_pos, click_through, exclude_from_capture, font, scale, tk_icon, virtual_screen
 
 MIN_W, MIN_H = 80, 28
 CHANGE_THRESHOLD = 3.0        # chênh lệch trung bình (0..255) của ảnh thu nhỏ để coi là "đã đổi"
@@ -211,11 +211,11 @@ class LensWindow:
             wdg.bind("<ButtonPress-1>", self._move_start)
             wdg.bind("<B1-Motion>", self._move)
             wdg.bind("<ButtonRelease-1>", self._drag_end)
-        self.btn_close = self._button("✕", self.close, "Đóng lăng kính")
-        self.btn_pause = self._button("⏸", self.toggle_pause, "Tạm dừng")
-        self.btn_copy = self._button("⧉", self.copy_translation, "Chép bản dịch")
-        self.btn_mode = self._button("⇅", self.toggle_mode, "Đè lên chữ / bảng bên dưới")
-        self.btn_lang = self._button("", self._pick_language, "Ngôn ngữ đích", wide=True)
+        self.btn_close = self._button("✕", self.close, icon="close", tip= "Đóng lăng kính")
+        self.btn_pause = self._button("⏸", self.toggle_pause, icon="pause", tip= "Tạm dừng")
+        self.btn_copy = self._button("⧉", self.copy_translation, icon="copy", tip= "Chép bản dịch")
+        self.btn_mode = self._button("⇅", self.toggle_mode, icon="mode", tip= "Đè lên chữ / bảng bên dưới")
+        self.btn_lang = self._button("", self._pick_language, tip="Ngôn ngữ đích", wide=True)
         self._update_lang()
 
         # tay nắm đổi cỡ ở góc dưới phải
@@ -246,10 +246,14 @@ class LensWindow:
     def px(self, n: float) -> int:
         return max(1, int(n * self.s))
 
-    def _button(self, text, cmd, tip, wide=False):
+    def _button(self, text, cmd, icon=None, tip="", wide=False):
         t = THEME
-        b = tk.Label(self.top, text=text, bg=t["accent_bg"], fg="white", font=font(10, symbol=not wide),
-                     padx=self.px(8 if wide else 6), cursor="hand2")
+        img = tk_icon(self.root, icon, self.px(16), "#ffffff") if icon else None
+        if img is not None:
+            b = tk.Label(self.top, image=img, bg=t["accent_bg"], padx=self.px(7), cursor="hand2")
+        else:
+            b = tk.Label(self.top, text=text, bg=t["accent_bg"], fg="white", font=font(10, symbol=not wide),
+                         padx=self.px(8 if wide else 6), cursor="hand2")
         b.pack(side="right", fill="y")
         b.bind("<Button-1>", lambda e: cmd())
         b.bind("<Enter>", lambda e: b.configure(bg=THEME["accent"]))
@@ -548,7 +552,11 @@ class LensWindow:
 
     def toggle_pause(self) -> None:
         self.paused = not self.paused
-        self.btn_pause.configure(text="▶" if self.paused else "⏸")
+        img = tk_icon(self.root, "play" if self.paused else "pause", self.px(16), "#ffffff")
+        if img is not None:
+            self.btn_pause.configure(image=img)
+        else:
+            self.btn_pause.configure(text="▶" if self.paused else "⏸")
         self.set_status("⏸ Đã tạm dừng — bấm ▶ để tiếp tục" if self.paused else "Tiếp tục theo dõi khung…")
         if not self.paused:
             self.dirty = True

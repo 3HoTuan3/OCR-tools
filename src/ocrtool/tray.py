@@ -451,6 +451,15 @@ class App:
     def open_log(self) -> None:
         _open_path(log_path())
 
+    def make_shortcuts(self) -> None:
+        from . import shortcut
+        try:
+            made = shortcut.create()
+            self.toast("Đã tạo lối tắt: " + ", ".join(made) + "\nGõ \"OCR\" vào Start để mở app.")
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Không tạo được lối tắt")
+            self.toast(f"Không tạo được lối tắt: {exc}")
+
     # ------------------------------------------------------------ phím tắt toàn cục
     def _start_hotkey(self) -> None:
         from .hotkey import GlobalHotkey
@@ -558,9 +567,12 @@ def main() -> int:
     try:
         import tkinter as tk
         from .snip import set_dpi_aware
+        from .uiutil import set_app_icons, set_app_id
 
         set_dpi_aware()
+        set_app_id()
         root = tk.Tk()
+        set_app_icons(root)
     except Exception:
         log.exception("Không khởi tạo được giao diện Tk (thiếu tkinter hoặc không có màn hình)")
         return 1

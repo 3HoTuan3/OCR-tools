@@ -11,6 +11,24 @@ THEME = {
 WIN = sys.platform == "win32"
 
 
+_photo_cache: dict = {}
+
+
+def tk_icon(root, name: str, px: int, color: str = THEME["fg"]):
+    """PhotoImage của icon asset (đã tô màu), giữ trong bộ nhớ đệm; None nếu không có icon."""
+    from .icons import has_icon, icon_image
+
+    if not has_icon(name):
+        return None
+    key = (id(root), name, px, color)
+    img = _photo_cache.get(key)
+    if img is None:
+        from PIL import ImageTk
+
+        img = _photo_cache[key] = ImageTk.PhotoImage(icon_image(name, px, color), master=root)
+    return img
+
+
 def font(size: int = 10, bold: bool = False, symbol: bool = False):
     family = ("Segoe UI Symbol" if symbol else "Segoe UI") if WIN else "DejaVu Sans"
     return (family, size, "bold") if bold else (family, size)
@@ -61,6 +79,35 @@ def button_down() -> bool:
 
 def now() -> float:
     return time.monotonic()
+
+
+def set_app_icons(root) -> None:
+    """Logo app cho mọi cửa sổ Tk (thanh tiêu đề, Alt+Tab, taskbar)."""
+    from .icons import asset, logo
+
+    try:
+        from PIL import ImageTk
+
+        imgs = [ImageTk.PhotoImage(logo(s), master=root) for s in (16, 32, 48, 64) if logo(s) is not None]
+        if imgs:
+            root.iconphoto(True, *imgs)
+            root._app_icons = imgs
+        if WIN and asset("app.ico").exists():
+            root.iconbitmap(default=str(asset("app.ico")))
+    except Exception:
+        pass
+
+
+def set_app_id() -> None:
+    """Windows: tách app khỏi nhóm "Python" trên taskbar để hiện đúng logo. Gọi trước khi tạo cửa sổ."""
+    if not WIN:
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ocrtool.tray")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------- Windows: cửa sổ phủ của lăng kính

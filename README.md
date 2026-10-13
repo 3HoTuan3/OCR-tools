@@ -9,7 +9,10 @@ chỉ riêng việc dịch (mặc định) cần Internet.
 **Lần đầu (một lần duy nhất):** bấm đúp `setup.bat`. Nó tạo thư mục `.venv`, cài thư viện, cài Tesseract và tải dữ liệu tiếng Việt.
 Đợi cửa sổ đen báo `Done.` rồi đóng.
 
-**Mỗi lần dùng:** bấm đúp **`ocr-tray.bat`**. Không hiện cửa sổ nào, chỉ có một ô vuông nhỏ nổi ở góc dưới phải màn hình
+`setup.bat` cũng tạo lối tắt **OCR Tool** (có logo) ở Start Menu và Desktop. Máy đã cài từ trước: bấm phải ô nổi →
+*Tạo lối tắt Start Menu + Desktop* (một lần).
+
+**Mỗi lần dùng:** bấm phím Windows, gõ **OCR** → Enter (hoặc bấm đúp lối tắt *OCR Tool* trên Desktop, hoặc `ocr-tray.bat`). Không hiện cửa sổ nào, chỉ có một ô vuông nhỏ nổi ở góc dưới phải màn hình
 (và biểu tượng trong mũi tên **^** cạnh đồng hồ). Từ đó:
 - **bấm trái** ô vuông → kéo chọn vùng → **Ctrl+V** để dán chữ;
 - **Shift + bấm trái** → mở/tắt lăng kính dịch;
@@ -25,7 +28,7 @@ Mỗi file là một "nút bấm" cho một việc, để bạn khỏi phải g�
 | File | Khi nào dùng |
 |---|---|
 | `setup.bat` | **Một lần** lúc cài đặt (hoặc khi cài lại). |
-| **`ocr-tray.bat`** | **Hằng ngày.** Mở app (ô nổi + khay). Đây là file duy nhất bạn cần nhớ. |
+| **`ocr-tray.bat`** | Mở app (ô nổi + khay). Lối tắt *OCR Tool* trong Start Menu làm đúng việc này, nên thường bạn không cần mở thư mục dự án. |
 | `ocr-tray-debug.bat` | Chỉ khi app **không hiện** hoặc bấm không có gì: mở app kèm cửa sổ đen hiện lỗi để gửi cho mình. |
 | `ocr-screen.bat` | Tuỳ chọn: chụp một lần rồi thoát, không cần app chạy nền (chậm hơn vì nạp engine mỗi lần). Hầu như không cần nữa vì đã có phím tắt Ctrl+Alt+O. |
 | `uninstall.bat` | Khi muốn gỡ sạch app. |
@@ -201,6 +204,15 @@ CER = tỉ lệ ký tự sai (bỏ qua khoảng trắng và kiểu gạch ngang)
 
 Đây là ảnh tổng hợp do chính dự án tạo, **không phải ảnh thực tế của bạn**. Hãy thử trên ảnh thật rồi đánh giá lại.
 
+## Icon
+
+- Logo app (`src/ocrtool/assets/app.ico`, `app*.png`, `LOGO.svg`) vẽ riêng cho dự án. Nó hiện ở ô nổi, khay hệ thống, thanh tiêu đề,
+  taskbar/Alt+Tab và lối tắt Start Menu/Desktop.
+- Icon trong menu và nút của lăng kính lấy từ [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons) của Microsoft
+  (giấy phép MIT, xem `assets/LICENSE-icons.txt`), cùng phong cách với Windows 11.
+- Muốn đổi icon: sửa `ICONS`/`LOGO_SVG` trong `scripts/build_icons.py` rồi chạy lại (hướng dẫn ở đầu file), hoặc thay thẳng file PNG
+  trong `assets/` (icon menu: PNG trắng 48×48 nền trong suốt; app tự tô màu).
+
 ## Cấu trúc
 
 ```
@@ -209,7 +221,7 @@ src/ocrtool/   tray.py (app nền: ô nổi + khay) · job.py (một lần chụ
                clipboard.py · config.py · autostart.py · capture.py (Wayland, toast) · doctor.py (kiểm tra cài đặt)
                worker.py + client.py (engine thường trực) · lens.py (lăng kính dịch)
                widget.py (ô nổi) · menu.py + appmenu.py (menu chuột phải) · result.py (cửa sổ kết quả)
-               translate.py (dịch) · layout.py (chế độ bảng) · hotkey.py · icons.py · uiutil.py
+               translate.py (dịch) · layout.py (chế độ bảng) · hotkey.py · icons.py + assets/ (logo, icon) · shortcut.py · uiutil.py
 setup / uninstall: setup.bat · setup.sh · uninstall.bat · uninstall.sh
 scripts/       get_tessdata.py · evaluate.py · make_samples.py
 tests/         python -m unittest discover -s tests -v

@@ -9,7 +9,7 @@ import tkinter as tk
 from dataclasses import dataclass
 from typing import Callable, Optional, Union
 
-from .uiutil import THEME, button_down, clamp_pos, font, now, scale, virtual_screen
+from .uiutil import THEME, button_down, clamp_pos, font, now, scale, tk_icon, virtual_screen
 
 Items = Union[list, Callable[[], list]]
 
@@ -139,14 +139,25 @@ class PopupMenu:
         row.pack(fill="x", padx=self._px(5))
         ipad = self._px(7)
         widgets = [row]
-        icon = tk.Label(row, text=item.icon, width=3, bg=t["bg"], font=font(11, symbol=True),
-                        fg=(t["accent"] if item.accent and item.enabled else fg))
+        icolor = t["accent"] if item.accent and item.enabled else fg
+        img = tk_icon(self.root, item.icon, self._px(18), icolor)
+        if img is not None:
+            icon = tk.Label(row, image=img, bg=t["bg"], width=self._px(26))
+        else:
+            icon = tk.Label(row, text=item.icon, width=3, bg=t["bg"], font=font(11, symbol=True), fg=icolor)
         icon.pack(side="left", pady=ipad, padx=(self._px(4), 0))
         text = tk.Label(row, text=item.label, anchor="w", bg=t["bg"], fg=fg, font=font(10, bold=item.accent))
         text.pack(side="left", fill="x", expand=True, padx=(self._px(4), self._px(10)))
         tail_txt = "›" if item.children is not None else ("✓" if item.checked else "")
-        tail = tk.Label(row, text=item.hint or tail_txt, width=(0 if item.hint else 2), bg=t["bg"],
-                        fg=(t["dim"] if item.hint else fg), font=font(10 if item.hint else 12, symbol=not item.hint))
+        tail_img = None
+        if not item.hint and tail_txt:
+            tail_img = tk_icon(self.root, "chevron" if item.children is not None else "check", self._px(14),
+                               t["dim"] if item.children is not None else (t["accent"] if item.enabled else fg))
+        if tail_img is not None:
+            tail = tk.Label(row, image=tail_img, bg=t["bg"], width=self._px(18))
+        else:
+            tail = tk.Label(row, text=item.hint or tail_txt, width=(0 if item.hint else 2), bg=t["bg"],
+                            fg=(t["dim"] if item.hint else fg), font=font(10 if item.hint else 12, symbol=not item.hint))
         tail.pack(side="right", padx=(0, self._px(8)))
         widgets += [icon, text, tail]
         for w in widgets:

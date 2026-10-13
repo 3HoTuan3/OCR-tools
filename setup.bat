@@ -44,7 +44,10 @@ echo [4/4] Downloading Vietnamese + English data for Tesseract ...
 echo.
 ".venv\Scripts\python.exe" -m ocrtool
 echo.
-echo Done. Start the app with:  ocr-tray.bat
+echo Creating "OCR Tool" shortcuts in Start Menu and on the Desktop ...
+".venv\Scripts\python.exe" -m ocrtool.shortcut
+echo.
+echo Done. Start the app: type OCR in the Start menu, or double-click ocr-tray.bat
 echo Then: click the small floating icon, drag to select text, press Ctrl+V. Right-click it for settings and translate.
 exit /b 0
 

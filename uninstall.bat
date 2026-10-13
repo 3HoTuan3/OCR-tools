@@ -19,6 +19,9 @@ powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $
 timeout /t 1 /nobreak >nul
 
 echo [2/6] Removing "start with Windows" entry ...
+del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\OCR Tool.lnk" >nul 2>nul
+del "%USERPROFILE%\Desktop\OCR Tool.lnk" >nul 2>nul
+if defined OneDrive del "%OneDrive%\Desktop\OCR Tool.lnk" >nul 2>nul
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v ocrtool /f >nul 2>nul
 if errorlevel 1 (echo   not set) else (echo   removed)
 
